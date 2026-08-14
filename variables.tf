@@ -5,7 +5,7 @@ variable "location" {
 }
 
 variable "subscription_id" {
-  description = "Subscription ID de Azure - requerido explícitamente por el provider azurerm >= 4.0. Sin default a propósito: pasarlo vía -var, un .tfvars gitignoreado, o la variable de entorno ARM_SUBSCRIPTION_ID"
+  description = "Subscription ID de Azure - requerido explícitamente por el provider azurerm >= 4.0. Sin default a propósito: pasarlo vía -var, un .tfvars gitignoreado, o la variable de entorno TF_VAR_subscription_id"
   type        = string
 }
 

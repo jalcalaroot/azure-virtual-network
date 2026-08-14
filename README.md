@@ -106,11 +106,11 @@ NAT Gateway can't be a route table next hop in Azure — egress is set via direc
 
 ## Usage
 
-`subscription_id` has no default (kept out of the repo on purpose) — export it as `ARM_SUBSCRIPTION_ID` or pass `-var subscription_id=<id>` on every `plan`/`apply`.
+`subscription_id` has no default (kept out of the repo on purpose) — export it as `TF_VAR_subscription_id` or pass `-var subscription_id=<id>` on every `plan`/`apply`.
 
 ```bash
 az login
-export ARM_SUBSCRIPTION_ID="<your-subscription-id>"
+export TF_VAR_subscription_id="<your-subscription-id>"
 terraform init
 terraform validate
 terraform plan
