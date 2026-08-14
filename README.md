@@ -121,6 +121,20 @@ terraform apply
 terraform destroy   # tear down
 ```
 
+### Tearing down fully
+
+`azurerm_resource_group.this` and `azurerm_virtual_network.this` both have `lifecycle { prevent_destroy = true }` - `terraform destroy` will refuse to remove them as-is. That's intentional; to actually tear the whole thing down, comment out (or delete) both `lifecycle` blocks in `network.tf` first, then destroy, then put them back before the next `apply`.
+
+Even with that removed, the final resource-group deletion step can still fail with *"the Resource Group still contains Resources"* pointing at `Microsoft.Insights/dataCollectionRules` / `dataCollectionEndpoints` named `NWTA-...` - Azure auto-creates these for Traffic Analytics on the Flow Log, outside of Terraform's control, so they're never in state and `terraform destroy` doesn't know about them. Delete them manually and re-run the resource group deletion:
+
+```bash
+az resource list -g rg-network -o table          # find the leftover NWTA-* resources
+az resource delete --ids <dataCollectionRule-id> <dataCollectionEndpoint-id>
+az group delete -n rg-network --yes
+```
+
+If you deploy again afterward, the Key Vault (`kv-ha-vnet-demo`) goes through Azure's mandatory soft-delete on destroy - check `az keyvault list-deleted` if a future `apply` complains about a name conflict.
+
 ## Configuration
 
 | Variable | Default | Description |
