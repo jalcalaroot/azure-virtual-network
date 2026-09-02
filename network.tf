@@ -8,6 +8,15 @@ resource "azurerm_virtual_network" "this" {
   resource_group_name = var.resource_group_name
   tags                = var.tags
 
+  # Cifra en tránsito el tráfico entre VMs que lo soportan (series D/E v4+ con
+  # Accelerated Networking) dentro de esta VNet y entre VNets peered - gratis,
+  # y AllowUnencrypted (el único modo disponible en GA) no rompe nada para VMs
+  # que no lo soporten, el tráfico hacia esas simplemente queda sin cifrar.
+  # Recomendado explícitamente por el Well-Architected Framework de Azure.
+  encryption {
+    enforcement = "AllowUnencrypted"
+  }
+
   lifecycle {
     prevent_destroy = true
   }
