@@ -26,4 +26,4 @@ The source module predates azurerm v5 in places the upgrade guide didn't flag:
 
 ## Status
 
-- 2026-09-02: Repo created (renamed from the old `xtratus/azure-virtual-network` mirror, which is now `jalcalaroot/azure-virtual-network-xtratus` — unrelated history, don't confuse the two). Full design ported and validated with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean, not yet applied). Not tagged/released yet.
+- 2026-09-02: Repo created (renamed from the old `xtratus/azure-virtual-network` mirror, which is now `jalcalaroot/azure-virtual-network-xtratus` — unrelated history, don't confuse the two). Full design ported and validated with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean, not yet applied). Tagged `v0.1.0`. Not yet wired into `jalcalaroot-azure-bootstrap/environments/dev` — that's the next step whenever real deployment is wanted (creates a NAT Gateway, Key Vault, Storage Account - real cost).
