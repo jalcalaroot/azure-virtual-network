@@ -25,12 +25,45 @@ resource "azurerm_log_analytics_workspace" "this" {
 # (azurerm_storage_account.this) para no depender de sus reglas de firewall -
 # los Flow Logs no soportan Private Endpoint como destino.
 resource "azurerm_storage_account" "flow_logs" {
+  #checkov:skip=CKV_AZURE_33:este storage account no expone Queue service, no aplica.
+  #checkov:skip=CKV_AZURE_206:LRS por costo - son logs operacionales no críticos, no datos de negocio (decisión cost-conscious consistente con el resto del proyecto).
+  #checkov:skip=CKV2_AZURE_33:los Flow Logs no soportan Private Endpoint como destino (ver comentario arriba) - se restringe con network_rules + bypass=AzureServices en su lugar.
+  #checkov:skip=CKV2_AZURE_40:no hay evidencia documentada de que Network Watcher pueda escribir Flow Logs en un storage account con Shared Key deshabilitado - se prioriza que la observabilidad funcione sobre este check (ver https://learn.microsoft.com/en-us/answers/questions/2153160/, que asume key access habilitado como troubleshooting step). Revisar si Microsoft documenta soporte AAD-only en el futuro.
+  #checkov:skip=CKV2_AZURE_41:consecuencia directa del skip anterior - este check requiere Shared Key deshabilitado como precondición.
+  #checkov:skip=CKV2_AZURE_1:CMK generaría costo de operaciones de Key Vault por un dato operacional (logs), no crítico - decisión cost-conscious consistente con el resto del proyecto.
   name                     = var.flow_logs_storage_account_name
   resource_group_name      = var.resource_group_name
   location                 = var.location
   account_tier             = "Standard"
   account_replication_type = "LRS"
   min_tls_version          = "TLS1_2"
+
+  # Cerrado a acceso público - Network Watcher escribe los flow logs como
+  # servicio confiable de Azure (bypass=AzureServices lo cubre, no requiere
+  # el storage account público). allow_nested_items_to_be_public es
+  # independiente de shared_access_key: bloquea acceso anónimo a blobs/
+  # contenedores sin afectar cómo Network Watcher escribe.
+  public_network_access_enabled   = false
+  allow_nested_items_to_be_public = false
+
+  network_rules {
+    default_action = "Deny"
+    bypass         = ["AzureServices"]
+  }
+
+  blob_properties {
+    delete_retention_policy {
+      days = 7
+    }
+    container_delete_retention_policy {
+      days = 7
+    }
+  }
+
+  sas_policy {
+    expiration_period = "01.00:00:00"
+    expiration_action = "Log"
+  }
 
   tags = var.tags
 }
@@ -39,6 +72,7 @@ resource "azurerm_storage_account" "flow_logs" {
 # creaciones nuevas desde junio 2025). Cubre toda la VNet con un solo
 # recurso en vez de uno por NSG.
 resource "azurerm_network_watcher_flow_log" "vnet" {
+  #checkov:skip=CKV_AZURE_12:default de var.flow_log_retention_days es 30, no >90 - decisión cost-conscious (más retención = más storage $$); el consumidor puede subirlo si lo necesita.
   name                 = "flowlog-${var.vnet_name}"
   network_watcher_name = data.azurerm_network_watcher.this.name
   resource_group_name  = data.azurerm_network_watcher.this.resource_group_name
