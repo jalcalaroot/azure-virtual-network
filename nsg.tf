@@ -6,6 +6,7 @@
 
 # NSG-Public: only allows HTTP/HTTPS from the Internet
 resource "azurerm_network_security_group" "public" {
+  #checkov:skip=CKV_AZURE_160:80 se mantiene por diseño para el redirect HTTP->HTTPS que hace App Gateway - el tráfico plano no llega a los backends, App Gateway lo redirige antes.
   name                = "nsg-public"
   location            = var.location
   resource_group_name = var.resource_group_name
@@ -136,6 +137,7 @@ resource "azurerm_network_security_group" "data" {
   }
 }
 resource "azurerm_network_security_group" "appgw" {
+  #checkov:skip=CKV_AZURE_160:80 se mantiene por diseño para el redirect HTTP->HTTPS que hace App Gateway - mismo motivo que nsg-public.
   name                = "nsg-appgw"
   location            = var.location
   resource_group_name = var.resource_group_name
