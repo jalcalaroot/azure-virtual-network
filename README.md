@@ -29,6 +29,7 @@ The flow logs resource (`observability.tf`) references the subscription's `Netwo
 
 ## Status
 
+- 2026-09-03: Checkov results now upload as SARIF to the GitHub Security tab (free — public repo). Added `.pre-commit-config.yaml` (gitleaks + `terraform fmt`, catches secrets/formatting before they leave your machine, not just in CI) — run `pip install pre-commit && pre-commit install` once per clone.
 - 2026-09-02: CI hardened — `tflint` + Checkov (blocking) added alongside `fmt`+`validate`, plus `gitleaks` secret scanning. Branch protection enabled on `main`. Both storage accounts hardened (public blob access, TLS version, delete retention, SAS policy; shared-key auth also disabled on the data storage account). Tagged `v0.2.0`.
 - 2026-09-02: Ported from `xtratus/azure-virtual-network`. Fixed for azurerm v5 (`azurerm_key_vault` now requires `rbac_authorization_enabled`, set to `true`; `azurerm_private_dns_zone_virtual_network_link` now uses `private_dns_zone_id` instead of `private_dns_zone_name`+`resource_group_name`). Validated end-to-end with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean) — not yet applied/tagged.
 
