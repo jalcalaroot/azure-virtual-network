@@ -34,6 +34,13 @@ Real fixes made getting Checkov clean: both storage accounts (`flow_logs`, `this
 
 15 Checkov exceptions, documented inline — most notably: Key Vault purge protection stays off (already a deliberate, pre-existing decision — see the `# set to true for production` comment right next to it), HTTP 80 stays open on the `public`/`appgw` NSGs for App Gateway's HTTP→HTTPS redirect, several cost-conscious calls (LRS/ZRS over GRS, no CMK, 30-day flow log retention — consistent with this workspace's cost-conscious-by-default convention established on the AWS side), and `shared_access_key_enabled` was deliberately **left on** for the `flow_logs` storage account specifically — no documented confirmation that Azure Network Watcher can write flow logs to an AAD-only storage account, so functioning observability took priority over that one check. Revisit if Microsoft ever documents AAD-only support for flow log destinations.
 
+## Secret scanning: two independent layers
+
+1. **gitleaks** (ours) — runs in CI (`gitleaks.yml`) and locally via pre-commit. Covers all 4 repos in the workspace.
+2. **GitHub's own native secret scanning + push protection** — confirmed `enabled` on this repo via the API (`security_and_analysis.secret_scanning.status`), free for public repos, zero setup from us. Push protection rejects a push containing a recognized secret pattern *before* it lands, not just flags it after. View at Settings → Security → Secret scanning alerts.
+
+Not available on the 2 private bootstrap repos — same GitHub Advanced Security gate as Code scanning/SARIF. gitleaks is the only coverage there.
+
 ## Gotcha: `#checkov:skip` doesn't dismiss the Security-tab alert
 
 Checkov's SARIF export doesn't mark skipped/accepted findings as suppressed — GitHub's code scanning shows them as regular **open** alerts regardless of the inline `#checkov:skip` comment and justification in the `.tf` file. All 15 existing ones were manually dismissed via the API (`gh api -X PATCH repos/jalcalaroot/azure-virtual-network/code-scanning/alerts/<n> -f state=dismissed -f dismissed_reason="..." -f dismissed_comment="..."`) with a reason (`false positive` for genuine Checkov limitations, `won't fix` for deliberate cost/design decisions) and a comment pointing back to the `.tf` justification. **If a future PR adds a new `#checkov:skip`, its alert will show up open in the Security tab and needs the same manual dismiss** — nothing automates this yet.
@@ -41,6 +48,12 @@ Checkov's SARIF export doesn't mark skipped/accepted findings as suppressed — 
 ## Supply-chain hardening (2026-09-05)
 
 Every third-party GitHub Action in this repo's workflows is now pinned to a full commit SHA (with a `# vX.Y.Z` comment for readability), per [GitHub's own Actions hardening guide](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions) — a tag like `@v4` is mutable; if that upstream repo is ever compromised and the tag moved, our CI would silently run malicious code with our OIDC credentials on the next push. `dependabot.yml` now also watches the `github-actions` ecosystem so these pins get bumped (new SHA + comment) automatically instead of going stale.
+
+## Gotcha: tflint's unauthenticated GitHub API rate limit (real, hit in production)
+
+`tflint --init` fetches the `azurerm` ruleset plugin from the GitHub API. Without a token, that's capped at 60 requests/hour **per IP** — and GitHub-hosted runners share IP pools across every repo/org using them, so this limit gets exhausted by unrelated traffic, not just ours. This broke a real CI run on `main` on 2026-09-05 with `403 API rate limit exceeded`. Fix: pass `GITHUB_TOKEN: ${{ github.token }}` as an env var on the `tflint` step (raises the limit to 5000/hour) — already applied here.
+
+**Related bug this exposed**: the SARIF-upload step had `if: always()`, meant to survive a *Checkov* failure (`soft_fail: false` exits non-zero on findings) — but it also ran when an *earlier, unrelated* step failed (tflint's rate limit), and choked on `results.sarif` not existing, masking the real error. Fixed by giving the Checkov step `id: checkov` and changing the upload condition to `if: always() && steps.checkov.outcome != 'skipped'`.
 
 Added `scorecard.yml` ([OSSF Scorecard](https://scorecard.dev/)) — free for public repos, uploads to the same Security tab as Checkov. Audits exactly this kind of practice (pinned dependencies, branch protection, token permissions, dangerous workflow patterns, etc.) automatically on every push, so a future unpinned Action gets flagged without anyone having to remember to check.
 
