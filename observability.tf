@@ -88,7 +88,7 @@ resource "azurerm_network_watcher_flow_log" "vnet" {
   }
 
   traffic_analytics {
-    enabled               = true
+    enabled               = var.enable_traffic_analytics
     workspace_id          = azurerm_log_analytics_workspace.this.workspace_id
     workspace_region      = azurerm_log_analytics_workspace.this.location
     workspace_resource_id = azurerm_log_analytics_workspace.this.id
