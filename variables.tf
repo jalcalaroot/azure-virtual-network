@@ -99,3 +99,19 @@ variable "flow_logs_storage_account_name" {
   type        = string
   default     = "stflowlogsjalcalaroot"
 }
+
+variable "enable_traffic_analytics" {
+  description = <<-EOT
+    Habilitar Traffic Analytics sobre el VNet Flow Log. Default true (recomendado
+    por el Well-Architected Framework), pero hay un problema conocido y sin
+    solución confirmada de Azure/Terraform (TAUserDoesNotHavePermissions) donde
+    la creación del Flow Log falla al intentar habilitar Traffic Analytics,
+    incluso con roles amplios (Contributor, Monitoring Contributor) a nivel
+    suscripción - ver hashicorp/terraform-provider-azurerm#31139, sin fix
+    confirmado en el hilo. Si eso pasa, poner esto en false como workaround:
+    el Flow Log en sí (captura cruda a storage) sigue funcionando normal, solo
+    se pierde el dashboard agregado de Traffic Analytics.
+  EOT
+  type        = bool
+  default     = true
+}
