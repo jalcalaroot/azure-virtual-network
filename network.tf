@@ -16,8 +16,4 @@ resource "azurerm_virtual_network" "this" {
   encryption {
     enforcement = "AllowUnencrypted"
   }
-
-  lifecycle {
-    prevent_destroy = true
-  }
 }
