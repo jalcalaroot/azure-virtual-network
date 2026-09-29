@@ -13,7 +13,7 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_private_dns_zone" "vaultcore" {
   name                = "privatelink.vaultcore.azure.net"
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "vaultcore" {
@@ -22,7 +22,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "vaultcore" {
   private_dns_zone_name = azurerm_private_dns_zone.vaultcore.name
   virtual_network_id    = module.vnet.resource_id
   registration_enabled  = false
-  tags                  = var.tags
+  tags                  = local.tags
 }
 
 module "key_vault" {
@@ -36,7 +36,7 @@ module "key_vault" {
   location            = var.location
   resource_group_name = var.resource_group_name
   tenant_id           = data.azurerm_client_config.current.tenant_id
-  tags                = var.tags
+  tags                = local.tags
 
   enable_telemetry = false
 

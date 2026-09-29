@@ -1,28 +1,44 @@
+variable "subscription_id" {
+  description = "Subscription ID de Azure - requerido explicitamente por el provider azurerm >= 4.0. Sin default a proposito: pasarlo via -var, un .tfvars gitignoreado, o TF_VAR_subscription_id (NO usar ARM_SUBSCRIPTION_ID, el provider no lo lee)."
+  type        = string
+}
+
 # --------------------------------------------------------------------------
-# Resource group: this module does NOT create one. The jalcalaroot account
+# Resource group: this project does NOT create one. The jalcalaroot account
 # uses a single shared resource group for every resource (unlike xtratus/,
-# which gives each project its own) - pass in the existing one.
+# which gives each project its own) - pass in the existing one. Defaults
+# match the only real deployment target this repo has (2026-09-29, once it
+# stopped being a bare module consumed from jalcalaroot-azure-bootstrap).
 # --------------------------------------------------------------------------
 
 variable "resource_group_name" {
-  description = "Name of the existing resource group to deploy into (not created by this module)"
+  description = "Name of the existing resource group to deploy into (not created by this project)"
   type        = string
+  default     = "jalcalaroot"
 }
 
 variable "location" {
   description = "Azure region to deploy resources (should match the resource group's region)"
   type        = string
+  default     = "eastus"
 }
 
-# --------------------------------------------------------------------------
-# Tags: this module does NOT build its own tag map. Pass in the consumer's
-# tags (e.g. module.tags.tags from the consumer's own tags module) so every
-# resource here stays consistent with everything else in the account.
-# --------------------------------------------------------------------------
+variable "owner" {
+  description = "Owner tag applied to every resource"
+  type        = string
+  default     = "johan"
+}
+
+variable "environment" {
+  description = "Environment tag applied to every resource"
+  type        = string
+  default     = "dev"
+}
 
 variable "tags" {
-  description = "Tags applied to every resource this module creates"
+  description = "Tags extra a mergear con las base (Project/Environment/Owner/ManagedBy) - no hace falta pasar las base a mano."
   type        = map(string)
+  default     = {}
 }
 
 variable "vnet_name" {
@@ -70,6 +86,18 @@ variable "aks_subnet_cidr" {
   description = "CIDR para la subnet dedicada de AKS (unica, no una por AZ - HA se maneja via zones del node pool)"
   type        = string
   default     = "10.0.60.0/24"
+}
+
+variable "containerapps_subnet_cidr" {
+  description = "CIDR para la subnet delegada a Microsoft.App/environments (azure-container-apps)"
+  type        = string
+  default     = "10.0.70.0/23"
+}
+
+variable "aks_virtual_nodes_subnet_cidr" {
+  description = "CIDR para la subnet delegada a Microsoft.ContainerInstance/containerGroups (AKS Virtual Nodes, azure-aks-cluster)"
+  type        = string
+  default     = "10.0.72.0/24"
 }
 
 # ============================================================================

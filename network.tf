@@ -25,7 +25,7 @@ resource "azurerm_public_ip" "nat" {
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
   sku                 = "Standard"
-  tags                = var.tags
+  tags                = local.tags
 }
 
 resource "azurerm_nat_gateway" "this" {
@@ -34,7 +34,7 @@ resource "azurerm_nat_gateway" "this" {
   resource_group_name     = var.resource_group_name
   sku_name                = "Standard"
   idle_timeout_in_minutes = 4
-  tags                    = var.tags
+  tags                    = local.tags
 }
 
 resource "azurerm_nat_gateway_public_ip_association" "this" {
@@ -52,7 +52,7 @@ resource "azurerm_network_security_group" "public" {
   name                = "nsg-public"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-HTTPS-Inbound"
@@ -94,7 +94,7 @@ resource "azurerm_network_security_group" "appgw" {
   name                = "nsg-appgw"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-GatewayManager"
@@ -157,7 +157,7 @@ resource "azurerm_network_security_group" "private" {
   name                = "nsg-private"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-From-Public-Subnets"
@@ -198,7 +198,7 @@ resource "azurerm_network_security_group" "data" {
   name                = "nsg-data"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-From-App-Subnets"
@@ -239,7 +239,7 @@ resource "azurerm_network_security_group" "aks" {
   name                = "nsg-aks"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-AzureLoadBalancer"
@@ -280,7 +280,7 @@ resource "azurerm_network_security_group" "privatelink" {
   name                = "nsg-privatelink"
   location            = var.location
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 
   security_rule {
     name                       = "Allow-From-App-And-Data-Subnets"
@@ -306,10 +306,102 @@ resource "azurerm_network_security_group" "privatelink" {
   }
 }
 
+# containerapps/aks_virtual_nodes: hasta 2026-09-29 vivian como bolt-ons
+# fuera de este modulo (en el repo consumidor), para no forzar un bump de
+# version del modulo por una necesidad puntual de un solo proyecto. Al
+# convertir este repo de "modulo versionado por git tag" a proyecto
+# standalone (ver CLAUDE.md), esa razon dejo de aplicar - un cambio aca ya
+# no tiene otros consumidores a los que romper, asi que se unificaron en el
+# mismo mapa subnets de abajo, igual que public/appgw/app/data/aks/privatelink.
+resource "azurerm_network_security_group" "containerapps" {
+  name                = "nsg-containerapps"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "Allow-AzureLoadBalancer"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_address_prefix = "*"
+  }
+  # Container Apps Environment (azure-container-apps) es internal-only a
+  # proposito - todo el trafico entrante real pasa por snet-appgw, nunca
+  # directo a este subnet.
+  security_rule {
+    name                       = "Allow-AppGateway-To-Edge-Proxy"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_ranges    = ["80", "443", "31080", "31443"]
+    source_address_prefix      = var.appgw_subnet_cidr
+    destination_address_prefix = "*"
+  }
+  security_rule {
+    name                       = "Allow-VNet-Inbound"
+    priority                   = 120
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Deny-All-Inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
+resource "azurerm_network_security_group" "aks_virtual_nodes" {
+  name                = "nsg-aks-virtual-nodes"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "Allow-VNet-Inbound"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Deny-All-Inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 # ============================================================================
 # Route tables - solo donde hace falta desviar del ruteo default de Azure.
-# appgw/privatelink no tienen (dependen del outbound default o van por NAT
-# Gateway sin necesitar una ruta explicita).
+# appgw/privatelink/aks_virtual_nodes no tienen (dependen del outbound
+# default o van por NAT Gateway sin necesitar una ruta explicita).
 # ============================================================================
 
 resource "azurerm_route_table" "public" {
@@ -317,7 +409,7 @@ resource "azurerm_route_table" "public" {
   location                      = var.location
   resource_group_name           = var.resource_group_name
   bgp_route_propagation_enabled = true
-  tags                          = var.tags
+  tags                          = local.tags
 
   route {
     name           = "to-internet"
@@ -331,7 +423,7 @@ resource "azurerm_route_table" "app" {
   location                      = var.location
   resource_group_name           = var.resource_group_name
   bgp_route_propagation_enabled = true
-  tags                          = var.tags
+  tags                          = local.tags
 }
 
 resource "azurerm_route_table" "data" {
@@ -339,7 +431,7 @@ resource "azurerm_route_table" "data" {
   location                      = var.location
   resource_group_name           = var.resource_group_name
   bgp_route_propagation_enabled = false
-  tags                          = var.tags
+  tags                          = local.tags
 
   route {
     name           = "block-internet"
@@ -353,7 +445,15 @@ resource "azurerm_route_table" "aks" {
   location                      = var.location
   resource_group_name           = var.resource_group_name
   bgp_route_propagation_enabled = true
-  tags                          = var.tags
+  tags                          = local.tags
+}
+
+resource "azurerm_route_table" "containerapps" {
+  name                          = "rt-containerapps"
+  location                      = var.location
+  resource_group_name           = var.resource_group_name
+  bgp_route_propagation_enabled = true
+  tags                          = local.tags
 }
 
 # ============================================================================
@@ -369,7 +469,7 @@ module "vnet" {
   location      = var.location
   parent_id     = data.azurerm_resource_group.this.id
   address_space = var.vnet_address_space
-  tags          = var.tags
+  tags          = local.tags
 
   enable_telemetry = false
 
@@ -422,6 +522,33 @@ module "vnet" {
       default_outbound_access_enabled   = true
       network_security_group            = { id = azurerm_network_security_group.privatelink.id }
       private_endpoint_network_policies = "Disabled"
+    }
+    containerapps = {
+      name                            = "snet-containerapps"
+      address_prefixes                = [var.containerapps_subnet_cidr]
+      default_outbound_access_enabled = true
+      network_security_group          = { id = azurerm_network_security_group.containerapps.id }
+      route_table                     = { id = azurerm_route_table.containerapps.id }
+      nat_gateway                     = { id = azurerm_nat_gateway.this.id }
+      delegations = [{
+        name = "containerapps-delegation"
+        service_delegation = {
+          name = "Microsoft.App/environments"
+        }
+      }]
+    }
+    aks_virtual_nodes = {
+      name                            = "snet-aks-virtual-nodes"
+      address_prefixes                = [var.aks_virtual_nodes_subnet_cidr]
+      default_outbound_access_enabled = true
+      network_security_group          = { id = azurerm_network_security_group.aks_virtual_nodes.id }
+      nat_gateway                     = { id = azurerm_nat_gateway.this.id }
+      delegations = [{
+        name = "aciDelegation"
+        service_delegation = {
+          name = "Microsoft.ContainerInstance/containerGroups"
+        }
+      }]
     }
   }
 }

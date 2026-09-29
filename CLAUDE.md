@@ -1,18 +1,29 @@
 # azure-virtual-network
 
-Terraform module (not a deployable project) for the Azure network layer of the `jalcalaroot` account. Lives at the repo root (no `terraform/bootstrap`/`environments` split — that structure is for `jalcalaroot-azure-bootstrap`, which consumes this module). Ported from `xtratus/azure-virtual-network`, minus resource-group creation.
+Standalone Terraform project for the Azure network layer of the `jalcalaroot` account - VNet, subnets, NSGs, route tables, NAT Gateway, Key Vault + Storage behind Private Endpoints, Flow Logs, and the two subnets (`azure-container-apps`, `azure-aks-cluster`) that used to live as bolt-ons elsewhere. Deployed independently, own backend/state/CI-CD, same shape as `azure-container-apps`/`azure-aks-cluster`. **Was a bare Terraform module (no backend, consumed via `source = "git::...?ref=vX.Y.Z"` from `jalcalaroot-azure-bootstrap`) until 2026-09-29** - see "De modulo a proyecto standalone" below for why and what changed. Originally ported from `xtratus/azure-virtual-network`, minus resource-group creation.
 
 ## Key difference from the source it was ported from
 
-`xtratus/azure-virtual-network` creates its own resource group (one RG per project, that account's convention). This module does **not** — `jalcalaroot` uses a single shared resource group for everything, so `resource_group_name`/`location` are required input variables, not resources this module manages.
+`xtratus/azure-virtual-network` creates its own resource group (one RG per project, that account's convention). This project does **not** — `jalcalaroot` uses a single shared resource group for everything, so `resource_group_name`/`location` are input variables (with defaults matching the only real deployment target), not resources managed here.
 
-## Conventions
+## De modulo a proyecto standalone (2026-09-29)
 
-- No state, no backend, no `provider` block here — a module never configures its own provider; the consumer's provider (with its own `subscription_id`, auth) applies.
-- No `tags` default here either — `tags` is a required variable, always passed through from the consumer's own tags module (`jalcalaroot-azure-bootstrap/terraform/modules/tags`). Don't hardcode tags in this repo.
-- Provider version constraint used to be intentionally loose (`>= 5.0`, no upper bound, "the consumer decides"). **No longer true as of the AVM rewrite** (see "Rebuilt on Azure Verified Modules" below) — the AVM modules used internally impose a real `>= 4.81.0, < 5.0.0` floor/ceiling of their own, and this module's `versions.tf` has to declare it too so Terraform can resolve a provider version satisfying the whole module tree. Don't tighten it further than that range without checking each AVM module's own constraint first.
-- Version via git tags (`v0.1.0`, ...), consumers pin `?ref=<tag>` in their `source`. Never expect a consumer to track `main`.
-- `examples/basic/` is how this module gets validated (`terraform validate`/`plan` needs a caller — a bare module has nothing to plan on its own).
+Disparado por una pregunta directa del usuario: "para que quedaria bootstrap si sacamos la vnet?" - la respuesta confirmo que la red nunca debio depender del ciclo de vida de `jalcalaroot-azure-bootstrap`, ni siquiera como llamada a modulo desde ahi. Cambios reales:
+
+- **Backend propio** (`backend.tf`, key `virtual-network/terraform.tfstate`, mismo storage account que el resto de la cuenta) y **provider propio** (`providers.tf`) - ya no es "sin state, sin provider, el consumidor decide" (la vieja convencion de modulo, ver abajo).
+- **Identidades de CI persistentes** (`ci_identities.tf` + root separado `./ci`) - mismo patron ya aplicado en `azure-container-apps`/`azure-aks-cluster`/`aws-eks-cluster`: este proyecto puede destruirse y recrearse sin que el CI se rompa, porque las identidades viven en un state que nunca se destruye junto con la red.
+- **Pipeline de CI/CD propio** (`terraform-plan.yml`/`terraform-apply.yml`, reemplazando el viejo `terraform-validate.yml` de modulo) - PR con `plan` comentado + Checkov/tflint bloqueantes, push a `main` dispara `apply` real vía OIDC.
+- **`examples/basic/` eliminado** - ya no hace falta un caller ficticio para validar, este proyecto se valida a si mismo con su propio backend real.
+- **Las 2 subnets bolt-on (`containerapps`, `aks_virtual_nodes`) se unificaron en el mismo mapa `subnets` del modulo AVM de VNet.** Hasta ahora vivian AFUERA de este modulo (en el repo consumidor) especificamente para no forzar un bump de version de un git tag por una necesidad puntual de un solo proyecto - esa razon dejo de aplicar en cuanto este repo dejo de ser una libreria versionada consumida por otros; un cambio aca ya no tiene mas consumidores a los que romper.
+- **`variables.tf`**: `resource_group_name`/`location` ganaron defaults (`jalcalaroot`/`eastus`, el unico deployment real de este proyecto). `tags` (antes un mapa completo requerido) paso a ser tags EXTRA que se mergean con una base (`Project`/`Environment`/`Owner`/`ManagedBy`) construida en `main.tf` a partir de `var.owner`/`var.environment` - mismo patron que `azure-container-apps`, en vez de forzar al consumidor a construir el mapa completo el mismo.
+
+## Conventions (superseded en 2026-09-29 para los primeros 2 puntos - dejado para contexto historico)
+
+- ~~No state, no backend, no `provider` block here~~ - ya no aplica, ver seccion de arriba.
+- ~~No `tags` default here either~~ - ya no aplica, ver seccion de arriba.
+- Provider version constraint: `>= 4.81.0, < 5.0.0` desde la migracion a AVM (ver "Rebuilt on Azure Verified Modules" abajo) - las AVM modules usadas internamente imponen ese piso/techo real, no es negociable sin chequear la constraint de cada modulo primero.
+- ~~Version via git tags, consumers pin `?ref=<tag>`~~ - ya no aplica, este repo ya no se consume como modulo.
+- ~~`examples/basic/` is how this module gets validated~~ - eliminado, ver seccion de arriba.
 
 ## azurerm v5 fixes made during the port
 
@@ -80,6 +91,7 @@ Verified end-to-end against the real `jalcalaroot` subscription via `jalcalaroot
 
 ## Status
 
+- 2026-09-29 (latest): Converted from a bare Terraform module (consumed by `jalcalaroot-azure-bootstrap`) to a fully standalone project - own backend, own persistent CI identities (`./ci`), own CI/CD pipeline, the 2 bolt-on subnets folded into the main `subnets` map, `examples/basic/` removed. See "De modulo a proyecto standalone" above. Applied for real against the `jalcalaroot` subscription.
 - 2026-09-28/29: Rebuilt on Azure Verified Modules. See section above. Tagged `v0.5.0`.
 - 2026-09-05: Supply-chain hardening - all Actions pinned by SHA, Dependabot watching `github-actions`, OSSF Scorecard added. See section above.
 - 2026-09-03: Checkov → SARIF → GitHub Security tab (free, public repo). `.pre-commit-config.yaml` added (gitleaks + `terraform fmt`) so secrets/formatting get caught locally, not just in CI. All 15 pre-existing Checkov exceptions dismissed in the Security tab with reasons/comments (see gotcha above) — 0 open alerts.
