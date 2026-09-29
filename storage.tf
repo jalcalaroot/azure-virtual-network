@@ -14,7 +14,7 @@
 resource "azurerm_private_dns_zone" "blob" {
   name                = "privatelink.blob.core.windows.net"
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
@@ -23,13 +23,13 @@ resource "azurerm_private_dns_zone_virtual_network_link" "blob" {
   private_dns_zone_name = azurerm_private_dns_zone.blob.name
   virtual_network_id    = module.vnet.resource_id
   registration_enabled  = false
-  tags                  = var.tags
+  tags                  = local.tags
 }
 
 resource "azurerm_private_dns_zone" "dfs" {
   name                = "privatelink.dfs.core.windows.net"
   resource_group_name = var.resource_group_name
-  tags                = var.tags
+  tags                = local.tags
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "dfs" {
@@ -38,7 +38,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "dfs" {
   private_dns_zone_name = azurerm_private_dns_zone.dfs.name
   virtual_network_id    = module.vnet.resource_id
   registration_enabled  = false
-  tags                  = var.tags
+  tags                  = local.tags
 }
 
 module "storage_flowlogs" {
@@ -55,7 +55,7 @@ module "storage_flowlogs" {
   name      = var.flow_logs_storage_account_name
   location  = var.location
   parent_id = data.azurerm_resource_group.this.id
-  tags      = var.tags
+  tags      = local.tags
 
   enable_telemetry = false
 
@@ -94,7 +94,7 @@ module "storage_data" {
   name      = var.storage_account_name
   location  = var.location
   parent_id = data.azurerm_resource_group.this.id
-  tags      = var.tags
+  tags      = local.tags
 
   enable_telemetry = false
 
