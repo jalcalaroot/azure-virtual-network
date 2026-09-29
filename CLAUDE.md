@@ -10,7 +10,7 @@ Terraform module (not a deployable project) for the Azure network layer of the `
 
 - No state, no backend, no `provider` block here — a module never configures its own provider; the consumer's provider (with its own `subscription_id`, auth) applies.
 - No `tags` default here either — `tags` is a required variable, always passed through from the consumer's own tags module (`jalcalaroot-azure-bootstrap/terraform/modules/tags`). Don't hardcode tags in this repo.
-- Provider version constraint is intentionally loose (`>= 5.0`, no upper bound) — the consumer's own `~> 5.0` pin governs the actual resolved version. Don't tighten this to `~>` here; that's how version conflicts happen when a module is more restrictive than its consumer.
+- Provider version constraint used to be intentionally loose (`>= 5.0`, no upper bound, "the consumer decides"). **No longer true as of the AVM rewrite** (see "Rebuilt on Azure Verified Modules" below) — the AVM modules used internally impose a real `>= 4.81.0, < 5.0.0` floor/ceiling of their own, and this module's `versions.tf` has to declare it too so Terraform can resolve a provider version satisfying the whole module tree. Don't tighten it further than that range without checking each AVM module's own constraint first.
 - Version via git tags (`v0.1.0`, ...), consumers pin `?ref=<tag>` in their `source`. Never expect a consumer to track `main`.
 - `examples/basic/` is how this module gets validated (`terraform validate`/`plan` needs a caller — a bare module has nothing to plan on its own).
 
