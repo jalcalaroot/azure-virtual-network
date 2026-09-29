@@ -105,3 +105,52 @@ output "log_analytics_workspace_id" {
   description = "ID del Log Analytics workspace de la red, para que otros proyectos (AKS, etc.) puedan enviar sus propios diagnostic settings ahi"
   value       = azurerm_log_analytics_workspace.this.id
 }
+
+output "containerapps_subnet_id" {
+  description = "Subnet delegada a Microsoft.App/environments (azure-container-apps)"
+  value       = module.vnet.subnets["containerapps"].resource_id
+}
+
+output "aks_virtual_nodes_subnet_id" {
+  description = "Subnet delegada a Microsoft.ContainerInstance/containerGroups (AKS Virtual Nodes, azure-aks-cluster)"
+  value       = module.vnet.subnets["aks_virtual_nodes"].resource_id
+}
+
+# ============================================================================
+# Nombres "network_*" - para que los consumidores (azure-container-apps,
+# azure-aks-cluster) sepan exactamente que copiar a sus GitHub variables
+# (TF_VAR_network_*). No hay wiring automatico entre repos (sin
+# terraform_remote_state) - estos valores se copian a mano, mismo patron que
+# usaban leyendo los outputs de jalcalaroot-azure-bootstrap antes de esta
+# separacion.
+# ============================================================================
+
+output "network_aks_subnet_id" {
+  description = "Subnet dedicada de AKS (node pool real)"
+  value       = module.vnet.subnets["aks"].resource_id
+}
+
+output "network_aks_virtual_nodes_subnet_id" {
+  description = "Subnet de AKS Virtual Nodes"
+  value       = module.vnet.subnets["aks_virtual_nodes"].resource_id
+}
+
+output "network_appgw_subnet_id" {
+  description = "Subnet dedicada de Application Gateway"
+  value       = module.vnet.subnets["appgw"].resource_id
+}
+
+output "network_containerapps_subnet_id" {
+  description = "Subnet delegada a Microsoft.App/environments"
+  value       = module.vnet.subnets["containerapps"].resource_id
+}
+
+output "network_vnet_id" {
+  description = "ID de la VNet completa"
+  value       = module.vnet.resource_id
+}
+
+output "network_log_analytics_workspace_id" {
+  description = "Log Analytics workspace de la red, para diagnostic settings de otros proyectos"
+  value       = azurerm_log_analytics_workspace.this.id
+}
