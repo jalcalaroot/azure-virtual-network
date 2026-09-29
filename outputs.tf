@@ -1,11 +1,11 @@
 output "vnet_id" {
   description = "ID of the created Virtual Network"
-  value       = azurerm_virtual_network.this.id
+  value       = module.vnet.resource_id
 }
 
 output "appgw_subnet_id" {
   description = "ID de la subnet dedicada de Application Gateway"
-  value       = azurerm_subnet.appgw.id
+  value       = module.vnet.subnets["appgw"].resource_id
 }
 
 output "appgw_subnet_cidr" {
@@ -15,17 +15,17 @@ output "appgw_subnet_cidr" {
 
 output "public_subnet_id" {
   description = "ID of the public subnet"
-  value       = azurerm_subnet.public.id
+  value       = module.vnet.subnets["public"].resource_id
 }
 
 output "app_subnet_id" {
   description = "ID of the app subnet"
-  value       = azurerm_subnet.app.id
+  value       = module.vnet.subnets["app"].resource_id
 }
 
 output "data_subnet_id" {
   description = "ID of the data subnet"
-  value       = azurerm_subnet.data.id
+  value       = module.vnet.subnets["data"].resource_id
 }
 
 output "nat_gateway_id" {
@@ -55,12 +55,12 @@ output "nsg_data_id" {
 
 output "privatelink_subnet_id" {
   description = "ID of the shared Private Endpoints subnet"
-  value       = azurerm_subnet.privatelink.id
+  value       = module.vnet.subnets["privatelink"].resource_id
 }
 
 output "aks_subnet_id" {
   description = "ID de la subnet dedicada de AKS"
-  value       = azurerm_subnet.aks.id
+  value       = module.vnet.subnets["aks"].resource_id
 }
 
 output "aks_subnet_cidr" {
@@ -70,28 +70,21 @@ output "aks_subnet_cidr" {
 
 output "key_vault_id" {
   description = "ID of the Key Vault"
-  value       = azurerm_key_vault.this.id
-}
-
-output "key_vault_private_endpoint_ip" {
-  description = "Private IP address assigned to the Key Vault Private Endpoint"
-  value       = azurerm_private_endpoint.key_vault.private_service_connection[0].private_ip_address
+  value       = module.key_vault.resource_id
 }
 
 output "storage_account_id" {
   description = "ID of the Storage Account"
-  value       = azurerm_storage_account.this.id
+  value       = module.storage_data.resource_id
 }
 
-output "storage_blob_private_endpoint_ip" {
-  description = "Private IP address assigned to the Storage Account Blob Private Endpoint"
-  value       = azurerm_private_endpoint.storage_blob.private_service_connection[0].private_ip_address
-}
-
-output "storage_dfs_private_endpoint_ip" {
-  description = "Private IP address assigned to the Storage Account DFS (ADLS Gen2) Private Endpoint"
-  value       = azurerm_private_endpoint.storage_dfs.private_service_connection[0].private_ip_address
-}
+# Sin output de IP de los private endpoints (existia antes de la migracion
+# a AVM) - las AVM de Key Vault/Storage solo exponen id/name/role_assignments
+# por private endpoint, no la IP asignada. Tampoco hace falta: la resolucion
+# real pasa por la Private DNS Zone (privatelink.vaultcore.azure.net / .blob.
+# / .dfs.core.windows.net, linkeadas a esta VNet), no por consumir la IP
+# cruda desde otro repo - ningun consumidor documentado (ver CLAUDE.md) las
+# leia de todas formas.
 
 output "route_table_public_id" {
   description = "ID of the route table applied to the public subnet (0.0.0.0/0 -> Internet)"
@@ -109,6 +102,6 @@ output "route_table_data_id" {
 }
 
 output "log_analytics_workspace_id" {
-  description = "ID del Log Analytics workspace de la red, para que otros proyectos (AKS, etc.) puedan enviar sus propios diagnostic settings ahí"
+  description = "ID del Log Analytics workspace de la red, para que otros proyectos (AKS, etc.) puedan enviar sus propios diagnostic settings ahi"
   value       = azurerm_log_analytics_workspace.this.id
 }
