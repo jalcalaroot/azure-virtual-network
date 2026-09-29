@@ -5,9 +5,12 @@ terraform {
   required_version = ">= 1.5.0"
 
   required_providers {
+    # Bajado de ">= 5.0" el 2026-09-28 - el modulo en si ahora exige
+    # ">= 4.81.0, < 5.0.0" (ver versions.tf en la raiz), asi que este ejemplo
+    # tiene que declarar un rango compatible con esa constraint agregada.
     azurerm = {
       source  = "hashicorp/azurerm"
-      version = ">= 5.0"
+      version = ">= 4.81.0, < 5.0.0"
     }
   }
 }
