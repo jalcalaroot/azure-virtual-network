@@ -103,9 +103,21 @@ Verified end-to-end against the real `jalcalaroot` subscription: applied cleanly
 
 Mismo fix ya aplicado en `azure-container-apps`/`azure-aks-cluster`/`aws-eks-cluster` (mismo problema: las identidades vivian en el mismo state que la infraestructura destruible, y un teardown se las llevaba puestas, rompiendo el CI hasta el proximo redeploy). Este repo lo tuvo resuelto desde el dia que se convirtio en proyecto standalone - nunca llego a pisar el bug en production porque el `./ci` se armo junto con todo lo demas el mismo 2026-09-29.
 
+## Subnet nueva `func`, delegada a Microsoft.Web/serverFarms (2026-09-30)
+
+Gap real encontrado escribiendo `azure-agent-platform` (proyecto nuevo, RAG platform): ese repo necesita VNet integration (outbound) para un Function App en plan Flex Consumption, y **ninguna subnet existente hasta ese momento tenia delegation a `Microsoft.Web/serverFarms`** - cada subnet solo admite una sola delegation, asi que ni `privatelink` (delegada a Private Endpoints) ni `appgw` (sin delegation pero reservada para Application Gateway) servian. Se agrego una subnet nueva siguiendo exactamente el mismo patron ya usado para `containerapps`/`aks_virtual_nodes` (bolt-on delegado, con su propia NSG minima - `Allow-VNet-Inbound` + `Deny-All-Inbound` - y asociada al NAT Gateway compartido para egress controlado, sin route table propia):
+
+- `func_subnet_cidr` default `10.0.73.0/24` (el siguiente bloque libre despues de `aks_virtual_nodes_subnet_cidr`, que termina en `10.0.72.255`)
+- `nsg-func`, mismo criterio que `nsg-aks-virtual-nodes` (subnet delegada, sin trafico inbound iniciado desde afuera de la VNet)
+- `delegations = [{ name = "funcDelegation", service_delegation = { name = "Microsoft.Web/serverFarms" } }]`
+- Outputs nuevos: `func_subnet_id` y `network_func_subnet_id` (este ultimo es el que copia `azure-agent-platform` a su variable `network_function_app_subnet_id`)
+
+Aplicado contra la VNet ya desplegada - agrega 1 subnet + 1 NSG, no destruye ni reemplaza nada existente.
+
 ## Status
 
-- 2026-09-29 (latest): Converted from a bare Terraform module (consumed by `jalcalaroot-azure-bootstrap`) to a fully standalone project - own backend, own persistent CI identities (`./ci`), own CI/CD pipeline, the 2 bolt-on subnets folded into the main `subnets` map, `examples/basic/` removed. See "De modulo a proyecto standalone" above. Applied for real against the `jalcalaroot` subscription.
+- 2026-09-30 (latest): Subnet `func` agregada (delegada a `Microsoft.Web/serverFarms`), para la VNet integration del Function App de `azure-agent-platform`. Ver seccion arriba. Aplicado contra la VNet real, sin downtime ni destroy de recursos existentes.
+- 2026-09-29: Converted from a bare Terraform module (consumed by `jalcalaroot-azure-bootstrap`) to a fully standalone project - own backend, own persistent CI identities (`./ci`), own CI/CD pipeline, the 2 bolt-on subnets folded into the main `subnets` map, `examples/basic/` removed. See "De modulo a proyecto standalone" above. Applied for real against the `jalcalaroot` subscription.
 - 2026-09-28/29: Rebuilt on Azure Verified Modules. See section above. Tagged `v0.5.0`.
 - 2026-09-05: Supply-chain hardening - all Actions pinned by SHA, Dependabot watching `github-actions`, OSSF Scorecard added. See section above.
 - 2026-09-03: Checkov → SARIF → GitHub Security tab (free, public repo). `.pre-commit-config.yaml` added (gitleaks + `terraform fmt`) so secrets/formatting get caught locally, not just in CI. All 15 pre-existing Checkov exceptions dismissed in the Security tab with reasons/comments (see gotcha above) — 0 open alerts.

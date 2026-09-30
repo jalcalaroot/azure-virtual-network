@@ -100,6 +100,12 @@ variable "aks_virtual_nodes_subnet_cidr" {
   default     = "10.0.72.0/24"
 }
 
+variable "func_subnet_cidr" {
+  description = "CIDR para la subnet delegada a Microsoft.Web/serverFarms (VNet integration outbound de Function Apps - azure-agent-platform)"
+  type        = string
+  default     = "10.0.73.0/24"
+}
+
 # ============================================================================
 # Observabilidad: Log Analytics, VNet Flow Logs, Diagnostic Settings
 # ============================================================================
