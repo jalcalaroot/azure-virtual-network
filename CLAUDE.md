@@ -2,6 +2,10 @@
 
 Standalone Terraform project for the Azure network layer of the `jalcalaroot` account - VNet, subnets, NSGs, route tables, NAT Gateway, Key Vault + Storage behind Private Endpoints, Flow Logs, and the two subnets (`azure-container-apps`, `azure-aks-cluster`) that used to live as bolt-ons elsewhere. Deployed independently, own backend/state/CI-CD, same shape as `azure-container-apps`/`azure-aks-cluster`. **Was a bare Terraform module (no backend, consumed via `source = "git::...?ref=vX.Y.Z"` from `jalcalaroot-azure-bootstrap`) until 2026-09-29** - see "De modulo a proyecto standalone" below for why and what changed. Originally ported from `xtratus/azure-virtual-network`, minus resource-group creation.
 
+## README structure (standard across all `jalcalaroot` Azure repos, 2026-09-30)
+
+README.md is a presentation page, not a design doc — exactly 7 sections, in this order: **Architecture** (diagram), **Resources deployed** (table: Resource | Purpose | Docs, one real Azure-docs link per row), **Prerequisites**, **Usage** (concise, commands over prose), **Configuration**, **Outputs**, **CI/CD**. Nothing else — no Cost, Status, Design notes, or changelog sections, and no cross-repo references to other cloud accounts' projects (don't expose the AWS side's footprint from an Azure repo, or vice versa). All narrative — rationale, history, gotchas, incidents — belongs here in CLAUDE.md instead, linked from the README's closing line.
+
 ## Key difference from the source it was ported from
 
 `xtratus/azure-virtual-network` creates its own resource group (one RG per project, that account's convention). This project does **not** — `jalcalaroot` uses a single shared resource group for everything, so `resource_group_name`/`location` are input variables (with defaults matching the only real deployment target), not resources managed here.
