@@ -1,14 +1,14 @@
 # azure-virtual-network
 
-Standalone Terraform project for the Azure network layer of the `jalcalaroot` account - VNet, subnets, NSGs, route tables, NAT Gateway, Key Vault + Storage behind Private Endpoints, Flow Logs, and the two subnets (`azure-container-apps`, `azure-aks-cluster`) that used to live as bolt-ons elsewhere. Deployed independently, own backend/state/CI-CD, same shape as `azure-container-apps`/`azure-aks-cluster`. **Was a bare Terraform module (no backend, consumed via `source = "git::...?ref=vX.Y.Z"` from `jalcalaroot-azure-bootstrap`) until 2026-09-29** - see "De modulo a proyecto standalone" below for why and what changed. Originally ported from `xtratus/azure-virtual-network`, minus resource-group creation.
+Standalone Terraform project for the Azure network layer of the `jalcalaroot` account - VNet, subnets, NSGs, route tables, NAT Gateway, Key Vault + Storage behind Private Endpoints, Flow Logs, and the two subnets (`azure-container-apps`, `azure-aks-cluster`) that used to live as bolt-ons elsewhere. Deployed independently, own backend/state/CI-CD, same shape as `azure-container-apps`/`azure-aks-cluster`. **Was a bare Terraform module (no backend, consumed via `source = "git::...?ref=vX.Y.Z"` from `jalcalaroot-azure-bootstrap`) until 2026-09-29** - see "De modulo a proyecto standalone" below for why and what changed.
 
 ## README structure (standard across all `jalcalaroot` Azure repos, 2026-09-30)
 
 README.md is a presentation page, not a design doc — exactly 7 sections, in this order: **Architecture** (diagram), **Resources deployed** (table: Resource | Purpose | Docs, one real Azure-docs link per row), **Prerequisites**, **Usage** (concise, commands over prose), **Configuration**, **Outputs**, **CI/CD**. Nothing else — no Cost, Status, Design notes, or changelog sections, and no cross-repo references to other cloud accounts' projects (don't expose the AWS side's footprint from an Azure repo, or vice versa). All narrative — rationale, history, gotchas, incidents — belongs here in CLAUDE.md instead, linked from the README's closing line.
 
-## Key difference from the source it was ported from
+## Resource group
 
-`xtratus/azure-virtual-network` creates its own resource group (one RG per project, that account's convention). This project does **not** — `jalcalaroot` uses a single shared resource group for everything, so `resource_group_name`/`location` are input variables (with defaults matching the only real deployment target), not resources managed here.
+This project does **not** create its own resource group — `jalcalaroot` uses a single shared resource group for everything, so `resource_group_name`/`location` are input variables (with defaults matching the only real deployment target), not resources managed here.
 
 ## De modulo a proyecto standalone (2026-09-29)
 
@@ -110,4 +110,4 @@ Mismo fix ya aplicado en `azure-container-apps`/`azure-aks-cluster`/`aws-eks-clu
 - 2026-09-05: Supply-chain hardening - all Actions pinned by SHA, Dependabot watching `github-actions`, OSSF Scorecard added. See section above.
 - 2026-09-03: Checkov → SARIF → GitHub Security tab (free, public repo). `.pre-commit-config.yaml` added (gitleaks + `terraform fmt`) so secrets/formatting get caught locally, not just in CI. All 15 pre-existing Checkov exceptions dismissed in the Security tab with reasons/comments (see gotcha above) — 0 open alerts.
 - 2026-09-02: DevSecOps hardening - tflint+Checkov+gitleaks in CI, branch protection on `main`, both storage accounts hardened (public access, TLS, retention, SAS policy, shared-key auth on the data storage account). Tagged `v0.2.0`.
-- 2026-09-02: Repo created (renamed from the old `xtratus/azure-virtual-network` mirror, which is now `jalcalaroot/azure-virtual-network-xtratus` — unrelated history, don't confuse the two). Full design ported and validated with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean, not yet applied). Tagged `v0.1.0`. Not yet wired into `jalcalaroot-azure-bootstrap/environments/dev` — that's the next step whenever real deployment is wanted (creates a NAT Gateway, Key Vault, Storage Account - real cost).
+- 2026-09-02: Repo created. Full design validated with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean, not yet applied). Tagged `v0.1.0`. Not yet wired into `jalcalaroot-azure-bootstrap/environments/dev` — that's the next step whenever real deployment is wanted (creates a NAT Gateway, Key Vault, Storage Account - real cost).
