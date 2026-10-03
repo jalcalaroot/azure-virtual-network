@@ -122,9 +122,12 @@ Aplicado contra la VNet ya desplegada - agrega 1 subnet + 1 NSG, no destruye ni 
 
 - `apim_subnet_cidr` default `10.0.74.0/24` (siguiente bloque libre despues de `func`, 10.0.73.0/24). Minimo exigido por Microsoft: /29; con el tier Developer usa una sola IP.
 - **Sin delegation** - la doc de APIM dice explicitamente que la subnet "shouldn't have any delegations enabled" (a diferencia de `func`, `containerapps` y `aks_virtual_nodes`).
-- `nsg-apim` con las reglas minimas de entrada para modo External: `Internet` -> 443 y `ApiManagement` -> 3443 (plano de administracion), mas `Deny-All-Inbound`. El outbound que APIM necesita (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este archivo, que no definen reglas de salida. `AzureLoadBalancer`:6390 no hace falta en Developer.
+- `nsg-apim` con las reglas minimas de entrada para modo External: `Internet` -> 443 y `ApiManagement` -> 3443 (plano de administracion), **sin** `Deny-All-Inbound` (ver correccion abajo). El outbound que APIM necesita (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este archivo, que no definen reglas de salida. `AzureLoadBalancer`:6390 no hace falta en Developer.
 - Sin NAT Gateway ni route table asociados: APIM con IP publica gestionada por Azure sale por su propia IP, y no hay motivo para forzarlo por el NAT compartido.
 - Outputs nuevos: `apim_subnet_id` y `network_apim_subnet_id` (el que copia `azure-agent-platform` a `network_apim_subnet_id`).
+
+
+**Correccion 2026-10-03:** `nsg-apim` se creo con un `Deny-All-Inbound` (4096) como el resto de NSGs de este archivo, y API Management fallo dos veces seguidas con `ActivationFailed` (primero con IP gestionada, luego con IP publica propia, sin detalle en el activity log). Un deny explicito anula las reglas por defecto de Azure `AllowVnetInBound` y `AllowAzureLoadBalancerInBound`, que la plataforma de APIM usa para los health probes de su load balancer interno y el trafico entre nodos - aunque la doc diga que `AzureLoadBalancer`:6390 "no se requiere" en Developer. Se quito el deny de `nsg-apim` (Internet sigue bloqueado por la regla por defecto `DenyAllInbound` 65500, salvo el 443 y el 3443 permitidos). Aplicado contra la VNet real (1 cambio, solo esa NSG, via `-target`).
 
 Solo codigo - no aplicado: la VNet esta destruida en Azure desde 2026-09-30. Mergear a `main` dispara `terraform-apply.yml` y recrea toda la red.
 

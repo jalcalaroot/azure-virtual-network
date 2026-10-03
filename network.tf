@@ -441,8 +441,16 @@ resource "azurerm_network_security_group" "func" {
 # delegations enabled") y exige un NSG con estas reglas minimas de entrada.
 # El outbound (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el
 # allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este
-# archivo, que no definen reglas de salida. AzureLoadBalancer:6390 no se
-# requiere en el tier Developer.
+# archivo, que no definen reglas de salida.
+#
+# SIN Deny-All-Inbound a proposito (a diferencia del resto de NSGs de este
+# archivo): un deny explicito en 4096 anula las reglas por defecto de Azure
+# AllowVnetInBound/AllowAzureLoadBalancerInBound, que la plataforma de APIM
+# necesita (health probes del load balancer interno, trafico entre nodos).
+# Dos activaciones seguidas fallaron con ActivationFailed con ese deny
+# puesto, aunque la doc dice que AzureLoadBalancer:6390 "no se requiere" en
+# Developer. Internet sigue bloqueado por la regla por defecto
+# DenyAllInbound (65500) salvo el 443 permitido arriba.
 resource "azurerm_network_security_group" "apim" {
   name                = "nsg-apim"
   location            = var.location
@@ -470,17 +478,6 @@ resource "azurerm_network_security_group" "apim" {
     destination_port_range     = "3443"
     source_address_prefix      = "ApiManagement"
     destination_address_prefix = "VirtualNetwork"
-  }
-  security_rule {
-    name                       = "Deny-All-Inbound"
-    priority                   = 4096
-    direction                  = "Inbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
   }
 }
 
