@@ -399,7 +399,7 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
 }
 
 # Agregada 2026-09-30: ningun subnet existente hasta ahora tenia delegation
-# a Microsoft.Web/serverFarms - gap real encontrado escribiendo
+# a Microsoft.App/environments (corregido 2026-10-03, ver abajo) - gap real encontrado escribiendo
 # azure-agent-platform (Function App Flex Consumption, VNet integration
 # outbound), cada subnet solo admite UNA delegation asi que ni privatelink
 # ni appgw sirven. Mismo patron minimo que aks_virtual_nodes (subnet
@@ -645,7 +645,7 @@ module "vnet" {
       delegations = [{
         name = "funcDelegation"
         service_delegation = {
-          name = "Microsoft.Web/serverFarms"
+          name = "Microsoft.App/environments"
         }
       }]
     }

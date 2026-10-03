@@ -103,16 +103,18 @@ Verified end-to-end against the real `jalcalaroot` subscription: applied cleanly
 
 Mismo fix ya aplicado en `azure-container-apps`/`azure-aks-cluster`/`aws-eks-cluster` (mismo problema: las identidades vivian en el mismo state que la infraestructura destruible, y un teardown se las llevaba puestas, rompiendo el CI hasta el proximo redeploy). Este repo lo tuvo resuelto desde el dia que se convirtio en proyecto standalone - nunca llego a pisar el bug en production porque el `./ci` se armo junto con todo lo demas el mismo 2026-09-29.
 
-## Subnet nueva `func`, delegada a Microsoft.Web/serverFarms (2026-09-30)
+## Subnet nueva `func`, delegada a Microsoft.App/environments (2026-09-30, delegacion corregida 2026-10-03)
 
 Gap real encontrado escribiendo `azure-agent-platform` (proyecto nuevo, RAG platform): ese repo necesita VNet integration (outbound) para un Function App en plan Flex Consumption, y **ninguna subnet existente hasta ese momento tenia delegation a `Microsoft.Web/serverFarms`** - cada subnet solo admite una sola delegation, asi que ni `privatelink` (delegada a Private Endpoints) ni `appgw` (sin delegation pero reservada para Application Gateway) servian. Se agrego una subnet nueva siguiendo exactamente el mismo patron ya usado para `containerapps`/`aks_virtual_nodes` (bolt-on delegado, con su propia NSG minima - `Allow-VNet-Inbound` + `Deny-All-Inbound` - y asociada al NAT Gateway compartido para egress controlado, sin route table propia):
 
 - `func_subnet_cidr` default `10.0.73.0/24` (el siguiente bloque libre despues de `aks_virtual_nodes_subnet_cidr`, que termina en `10.0.72.255`)
 - `nsg-func`, mismo criterio que `nsg-aks-virtual-nodes` (subnet delegada, sin trafico inbound iniciado desde afuera de la VNet)
-- `delegations = [{ name = "funcDelegation", service_delegation = { name = "Microsoft.Web/serverFarms" } }]`
+- `delegations = [{ name = "funcDelegation", service_delegation = { name = "Microsoft.App/environments" } }]`
 - Outputs nuevos: `func_subnet_id` y `network_func_subnet_id` (este ultimo es el que copia `azure-agent-platform` a su variable `network_function_app_subnet_id`)
 
 Aplicado contra la VNet ya desplegada - agrega 1 subnet + 1 NSG, no destruye ni reemplaza nada existente.
+
+**Correccion 2026-10-03 (error mio, encontrado en el primer apply real de `azure-agent-platform`):** la subnet se creo delegada a `Microsoft.Web/serverFarms`, que es la delegacion de los planes Premium y Dedicated. **Flex Consumption exige `Microsoft.App/environments`** (doc "Create and Manage Function Apps in a Flex Consumption Plan": "Delegate the subnet to `Microsoft.App/environments`. This delegation differs from Premium and Dedicated plans, which use `Microsoft.Web/serverFarms`"). Con la delegacion equivocada el Function App fallaba con `ServiceAssociationLink ... Unable to integrate function app with subnet`. Otras restricciones de esa doc: el resource provider `Microsoft.App` debe estar registrado, el nombre de la subnet no puede llevar `_`, la subnet no puede tener Private Endpoints ni service endpoints, y no se comparte con un entorno de Container Apps (`snet-containerapps` es una subnet aparte). Se cambio la delegacion en el codigo y se aplico contra la VNet real; los textos de arriba que dicen `Microsoft.Web/serverFarms` describen la decision original y quedan solo como historia.
 
 ## Subnet nueva `apim`, para API Management en modo VNet External (2026-10-03)
 
@@ -128,7 +130,7 @@ Solo codigo - no aplicado: la VNet esta destruida en Azure desde 2026-09-30. Mer
 
 ## Status
 
-- 2026-10-03 (latest): Subnet `apim` agregada en codigo (rama `add-apim-subnet`, apilada sobre `add-func-subnet` / PR #32, que sigue abierto). Sin aplicar. Ver seccion arriba.
+- 2026-10-03 (latest): Delegacion de la subnet `func` corregida a `Microsoft.App/environments` (Flex Consumption). Subnet `apim` agregada en codigo (rama `add-apim-subnet`, apilada sobre `add-func-subnet` / PR #32, que sigue abierto). Sin aplicar. Ver seccion arriba.
 - 2026-09-30: Subnet `func` agregada (delegada a `Microsoft.Web/serverFarms`), para la VNet integration del Function App de `azure-agent-platform`. Ver seccion arriba. Aplicado contra la VNet real, sin downtime ni destroy de recursos existentes.
 - 2026-09-29: Converted from a bare Terraform module (consumed by `jalcalaroot-azure-bootstrap`) to a fully standalone project - own backend, own persistent CI identities (`./ci`), own CI/CD pipeline, the 2 bolt-on subnets folded into the main `subnets` map, `examples/basic/` removed. See "De modulo a proyecto standalone" above. Applied for real against the `jalcalaroot` subscription.
 - 2026-09-28/29: Rebuilt on Azure Verified Modules. See section above. Tagged `v0.5.0`.
