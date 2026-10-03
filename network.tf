@@ -398,6 +398,42 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
   }
 }
 
+# Agregada 2026-09-30: ningun subnet existente hasta ahora tenia delegation
+# a Microsoft.Web/serverFarms - gap real encontrado escribiendo
+# azure-agent-platform (Function App Flex Consumption, VNet integration
+# outbound), cada subnet solo admite UNA delegation asi que ni privatelink
+# ni appgw sirven. Mismo patron minimo que aks_virtual_nodes (subnet
+# delegada, sin trafico inbound iniciado desde afuera de la VNet).
+resource "azurerm_network_security_group" "func" {
+  name                = "nsg-func"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "Allow-VNet-Inbound"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "VirtualNetwork"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Deny-All-Inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 # ============================================================================
 # Route tables - solo donde hace falta desviar del ruteo default de Azure.
 # appgw/privatelink/aks_virtual_nodes no tienen (dependen del outbound
@@ -547,6 +583,19 @@ module "vnet" {
         name = "aciDelegation"
         service_delegation = {
           name = "Microsoft.ContainerInstance/containerGroups"
+        }
+      }]
+    }
+    func = {
+      name                            = "snet-func"
+      address_prefixes                = [var.func_subnet_cidr]
+      default_outbound_access_enabled = true
+      network_security_group          = { id = azurerm_network_security_group.func.id }
+      nat_gateway                     = { id = azurerm_nat_gateway.this.id }
+      delegations = [{
+        name = "funcDelegation"
+        service_delegation = {
+          name = "Microsoft.Web/serverFarms"
         }
       }]
     }
