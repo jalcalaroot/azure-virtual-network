@@ -114,9 +114,22 @@ Gap real encontrado escribiendo `azure-agent-platform` (proyecto nuevo, RAG plat
 
 Aplicado contra la VNet ya desplegada - agrega 1 subnet + 1 NSG, no destruye ni reemplaza nada existente.
 
+## Subnet nueva `apim`, para API Management en modo VNet External (2026-10-03)
+
+`azure-agent-platform` cambia su capa de entrada de Application Gateway + WAF a **API Management tier Developer** (~$48/mes, el mas barato que soporta VNet injection) delante del Function App privado. Developer en modo **External** deja el gateway publico y le permite llegar a backends privados (el Function App por Private Endpoint), asi que necesita su propia subnet dentro de esta VNet:
+
+- `apim_subnet_cidr` default `10.0.74.0/24` (siguiente bloque libre despues de `func`, 10.0.73.0/24). Minimo exigido por Microsoft: /29; con el tier Developer usa una sola IP.
+- **Sin delegation** - la doc de APIM dice explicitamente que la subnet "shouldn't have any delegations enabled" (a diferencia de `func`, `containerapps` y `aks_virtual_nodes`).
+- `nsg-apim` con las reglas minimas de entrada para modo External: `Internet` -> 443 y `ApiManagement` -> 3443 (plano de administracion), mas `Deny-All-Inbound`. El outbound que APIM necesita (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este archivo, que no definen reglas de salida. `AzureLoadBalancer`:6390 no hace falta en Developer.
+- Sin NAT Gateway ni route table asociados: APIM con IP publica gestionada por Azure sale por su propia IP, y no hay motivo para forzarlo por el NAT compartido.
+- Outputs nuevos: `apim_subnet_id` y `network_apim_subnet_id` (el que copia `azure-agent-platform` a `network_apim_subnet_id`).
+
+Solo codigo - no aplicado: la VNet esta destruida en Azure desde 2026-09-30. Mergear a `main` dispara `terraform-apply.yml` y recrea toda la red.
+
 ## Status
 
-- 2026-09-30 (latest): Subnet `func` agregada (delegada a `Microsoft.Web/serverFarms`), para la VNet integration del Function App de `azure-agent-platform`. Ver seccion arriba. Aplicado contra la VNet real, sin downtime ni destroy de recursos existentes.
+- 2026-10-03 (latest): Subnet `apim` agregada en codigo (rama `add-apim-subnet`, apilada sobre `add-func-subnet` / PR #32, que sigue abierto). Sin aplicar. Ver seccion arriba.
+- 2026-09-30: Subnet `func` agregada (delegada a `Microsoft.Web/serverFarms`), para la VNet integration del Function App de `azure-agent-platform`. Ver seccion arriba. Aplicado contra la VNet real, sin downtime ni destroy de recursos existentes.
 - 2026-09-29: Converted from a bare Terraform module (consumed by `jalcalaroot-azure-bootstrap`) to a fully standalone project - own backend, own persistent CI identities (`./ci`), own CI/CD pipeline, the 2 bolt-on subnets folded into the main `subnets` map, `examples/basic/` removed. See "De modulo a proyecto standalone" above. Applied for real against the `jalcalaroot` subscription.
 - 2026-09-28/29: Rebuilt on Azure Verified Modules. See section above. Tagged `v0.5.0`.
 - 2026-09-05: Supply-chain hardening - all Actions pinned by SHA, Dependabot watching `github-actions`, OSSF Scorecard added. See section above.

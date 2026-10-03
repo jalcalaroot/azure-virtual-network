@@ -434,6 +434,56 @@ resource "azurerm_network_security_group" "func" {
   }
 }
 
+# Agregada 2026-10-03 para API Management (tier Developer) en modo VNet
+# External (azure-agent-platform): el gateway queda publico y llega a los
+# backends privados (Function App por Private Endpoint). La subnet de APIM
+# NO puede tener delegation (doc de Microsoft: "shouldn't have any
+# delegations enabled") y exige un NSG con estas reglas minimas de entrada.
+# El outbound (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el
+# allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este
+# archivo, que no definen reglas de salida. AzureLoadBalancer:6390 no se
+# requiere en el tier Developer.
+resource "azurerm_network_security_group" "apim" {
+  name                = "nsg-apim"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "Allow-Internet-HTTPS"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Allow-ApiManagement-Management"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3443"
+    source_address_prefix      = "ApiManagement"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Deny-All-Inbound"
+    priority                   = 4096
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
+}
+
 # ============================================================================
 # Route tables - solo donde hace falta desviar del ruteo default de Azure.
 # appgw/privatelink/aks_virtual_nodes no tienen (dependen del outbound
@@ -598,6 +648,12 @@ module "vnet" {
           name = "Microsoft.Web/serverFarms"
         }
       }]
+    }
+    apim = {
+      name                            = "snet-apim"
+      address_prefixes                = [var.apim_subnet_cidr]
+      default_outbound_access_enabled = true
+      network_security_group          = { id = azurerm_network_security_group.apim.id }
     }
   }
 }
