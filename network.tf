@@ -399,7 +399,7 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
 }
 
 # Agregada 2026-09-30: ningun subnet existente hasta ahora tenia delegation
-# a Microsoft.Web/serverFarms - gap real encontrado escribiendo
+# a Microsoft.App/environments (corregido 2026-10-03, ver abajo) - gap real encontrado escribiendo
 # azure-agent-platform (Function App Flex Consumption, VNet integration
 # outbound), cada subnet solo admite UNA delegation asi que ni privatelink
 # ni appgw sirven. Mismo patron minimo que aks_virtual_nodes (subnet
@@ -431,6 +431,53 @@ resource "azurerm_network_security_group" "func" {
     destination_port_range     = "*"
     source_address_prefix      = "*"
     destination_address_prefix = "*"
+  }
+}
+
+# Agregada 2026-10-03 para API Management (tier Developer) en modo VNet
+# External (azure-agent-platform): el gateway queda publico y llega a los
+# backends privados (Function App por Private Endpoint). La subnet de APIM
+# NO puede tener delegation (doc de Microsoft: "shouldn't have any
+# delegations enabled") y exige un NSG con estas reglas minimas de entrada.
+# El outbound (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el
+# allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este
+# archivo, que no definen reglas de salida.
+#
+# SIN Deny-All-Inbound a proposito (a diferencia del resto de NSGs de este
+# archivo): un deny explicito en 4096 anula las reglas por defecto de Azure
+# AllowVnetInBound/AllowAzureLoadBalancerInBound, que la plataforma de APIM
+# necesita (health probes del load balancer interno, trafico entre nodos).
+# Dos activaciones seguidas fallaron con ActivationFailed con ese deny
+# puesto, aunque la doc dice que AzureLoadBalancer:6390 "no se requiere" en
+# Developer. Internet sigue bloqueado por la regla por defecto
+# DenyAllInbound (65500) salvo el 443 permitido arriba.
+resource "azurerm_network_security_group" "apim" {
+  name                = "nsg-apim"
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  tags                = local.tags
+
+  security_rule {
+    name                       = "Allow-Internet-HTTPS"
+    priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "VirtualNetwork"
+  }
+  security_rule {
+    name                       = "Allow-ApiManagement-Management"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "3443"
+    source_address_prefix      = "ApiManagement"
+    destination_address_prefix = "VirtualNetwork"
   }
 }
 
@@ -595,9 +642,15 @@ module "vnet" {
       delegations = [{
         name = "funcDelegation"
         service_delegation = {
-          name = "Microsoft.Web/serverFarms"
+          name = "Microsoft.App/environments"
         }
       }]
+    }
+    apim = {
+      name                            = "snet-apim"
+      address_prefixes                = [var.apim_subnet_cidr]
+      default_outbound_access_enabled = true
+      network_security_group          = { id = azurerm_network_security_group.apim.id }
     }
   }
 }

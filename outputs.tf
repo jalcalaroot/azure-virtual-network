@@ -117,8 +117,13 @@ output "aks_virtual_nodes_subnet_id" {
 }
 
 output "func_subnet_id" {
-  description = "Subnet delegada a Microsoft.Web/serverFarms (VNet integration de Function Apps, azure-agent-platform)"
+  description = "Subnet delegada a Microsoft.App/environments (VNet integration de Function Apps Flex Consumption, azure-agent-platform)"
   value       = module.vnet.subnets["func"].resource_id
+}
+
+output "apim_subnet_id" {
+  description = "Subnet de API Management en modo VNet External (azure-agent-platform)"
+  value       = module.vnet.subnets["apim"].resource_id
 }
 
 # ============================================================================
@@ -151,8 +156,13 @@ output "network_containerapps_subnet_id" {
 }
 
 output "network_func_subnet_id" {
-  description = "Subnet delegada a Microsoft.Web/serverFarms (VNet integration de Function Apps)"
+  description = "Subnet delegada a Microsoft.App/environments (VNet integration de Function Apps Flex Consumption)"
   value       = module.vnet.subnets["func"].resource_id
+}
+
+output "network_apim_subnet_id" {
+  description = "Subnet de API Management en modo VNet External"
+  value       = module.vnet.subnets["apim"].resource_id
 }
 
 output "network_vnet_id" {
