@@ -43,19 +43,25 @@ resource "azurerm_role_assignment" "ci_plan_rg_reader" {
   principal_id         = data.azurerm_user_assigned_identity.ci_plan.principal_id
 }
 
-# Backend remoto: Storage Blob Data Contributor (data plane, lease de
-# locking) + Reader (management plane, para que el data source
-# azurerm_storage_account pueda leer el objeto ARM) - mismo gap ya
-# documentado en jalcalaroot-azure-bootstrap/azure-container-apps.
+# Backend remoto: Storage Blob Data Owner (data plane, lease de locking) +
+# Reader (management plane, para que el data source azurerm_storage_account
+# pueda leer el objeto ARM). "Storage Blob Data Contributor" NO ALCANZA -
+# su dataActions ([delete, read, write, move/action, add/action]) no
+# incluye blobs/lease/action, confirmado contra la definicion real del rol
+# el 2026-10-03 cuando esto rompio drift-detection.yml de
+# jalcalaroot-azure-bootstrap con AuthorizationPermissionMismatch. "Owner"
+# si lo cubre (dataActions = blobs/* via wildcard) - es el minimo real,
+# Azure no tiene un rol que de solo "lease" sin tambien delete/move/add.
+# Mismo fix en jalcalaroot-azure-bootstrap/azure-container-apps/azure-aks-cluster.
 resource "azurerm_role_assignment" "ci_agent_state_write" {
   scope                = data.azurerm_storage_account.tfstate.id
-  role_definition_name = "Storage Blob Data Contributor"
+  role_definition_name = "Storage Blob Data Owner"
   principal_id         = data.azurerm_user_assigned_identity.ci_agent.principal_id
 }
 
 resource "azurerm_role_assignment" "ci_plan_state_write" {
   scope                = data.azurerm_storage_account.tfstate.id
-  role_definition_name = "Storage Blob Data Contributor"
+  role_definition_name = "Storage Blob Data Owner"
   principal_id         = data.azurerm_user_assigned_identity.ci_plan.principal_id
 }
 
