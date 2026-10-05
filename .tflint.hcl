@@ -12,9 +12,7 @@ plugin "terraform" {
 # lifecycle { prevent_destroy } es una decisión del consumidor del módulo, no
 # del módulo en sí - no acepta variables, así que fijarlo acá forzaría la
 # protección incluso en entornos descartables (dev/test). Cada proyecto
-# consumidor decide esto a nivel de su propio código (ver p.ej.
-# xtratus/azure-virtual-network CLAUDE.md, que documenta esa decisión en su
-# propio nivel).
+# consumidor decide esto a nivel de su propio código.
 rule "azurerm_resources_missing_prevent_destroy" {
   enabled = false
 }
