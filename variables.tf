@@ -100,6 +100,18 @@ variable "aks_virtual_nodes_subnet_cidr" {
   default     = "10.0.72.0/24"
 }
 
+variable "func_subnet_cidr" {
+  description = "CIDR para la subnet delegada a Microsoft.App/environments (VNet integration outbound de Function Apps en plan Flex Consumption - azure-agent-platform)"
+  type        = string
+  default     = "10.0.73.0/24"
+}
+
+variable "apim_subnet_cidr" {
+  description = "CIDR para la subnet de API Management en modo VNet External (azure-agent-platform). Sin delegation - APIM la prohibe. Minimo /29, un /24 deja margen."
+  type        = string
+  default     = "10.0.74.0/24"
+}
+
 # ============================================================================
 # Observabilidad: Log Analytics, VNet Flow Logs, Diagnostic Settings
 # ============================================================================
