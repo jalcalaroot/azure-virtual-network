@@ -19,6 +19,8 @@ The Azure network layer (VNet, subnets, NSGs, route tables, NAT Gateway, Key Vau
   └────────┴─────────┴────────┴────────┴─────────────┘
   + privatelink subnet (Key Vault + Storage Private Endpoints)
   + aks-virtual-nodes subnet (delegated to ACI)
+  + func subnet (delegated to Microsoft.App/environments - Flex Consumption Function Apps)
+  + apim subnet (API Management, VNet External mode)
                        │
         NSG + Route Table per subnet, Flow Logs → Log Analytics
 ```
@@ -27,7 +29,7 @@ The Azure network layer (VNet, subnets, NSGs, route tables, NAT Gateway, Key Vau
 
 | Resource | Purpose | Docs |
 |---|---|---|
-| Virtual Network + 8 subnets | Core network, one subnet per workload tier; built on [`Azure/avm-res-network-virtualnetwork` v0.22.2](https://registry.terraform.io/modules/Azure/avm-res-network-virtualnetwork/azurerm/0.22.2) | [Azure VNet overview](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-overview) |
+| Virtual Network + 10 subnets | Core network, one subnet per workload tier; built on [`Azure/avm-res-network-virtualnetwork` v0.22.2](https://registry.terraform.io/modules/Azure/avm-res-network-virtualnetwork/azurerm/0.22.2) | [Azure VNet overview](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-overview) |
 | Network Security Groups | Per-subnet traffic rules | [NSG overview](https://learn.microsoft.com/en-us/azure/virtual-network/network-security-groups-overview) |
 | Route Tables | Custom routing per subnet | [Route tables](https://learn.microsoft.com/en-us/azure/virtual-network/virtual-networks-udr-overview) |
 | NAT Gateway | Outbound internet for private subnets | [NAT Gateway overview](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview) |
@@ -64,6 +66,8 @@ terraform apply
 | `public_subnet_cidr` / `app_subnet_cidr` / `data_subnet_cidr` | `10.0.0.0/22` / `10.0.8.0/22` / `10.0.20.0/22` | |
 | `appgw_subnet_cidr` / `aks_subnet_cidr` | `10.0.40.0/24` / `10.0.60.0/24` | |
 | `containerapps_subnet_cidr` / `aks_virtual_nodes_subnet_cidr` | `10.0.70.0/23` / `10.0.72.0/24` | |
+| `func_subnet_cidr` | `10.0.73.0/24` | Delegated to `Microsoft.App/environments` (Flex Consumption Function Apps VNet integration) |
+| `apim_subnet_cidr` | `10.0.74.0/24` | API Management in VNet External mode (no delegation) |
 | `privatelink_subnet_cidr` | `10.0.30.0/24` | Key Vault + Storage Private Endpoints |
 | `key_vault_name` / `storage_account_name` | `kv-jalcalaroot-net` / `stjalcalarootnet` | globally unique |
 | `flow_logs_storage_account_name` | `stflowlogsjalcalaroot` | globally unique |
@@ -77,7 +81,7 @@ terraform apply
 |---|---|
 | `vnet_id` | Full Virtual Network resource ID |
 | `public_subnet_id` / `app_subnet_id` / `data_subnet_id` / `privatelink_subnet_id` | Subnet IDs |
-| `network_appgw_subnet_id` / `network_aks_subnet_id` / `network_aks_virtual_nodes_subnet_id` / `network_containerapps_subnet_id` | Subnet IDs copied by consumer repos into their own GitHub variables |
+| `network_appgw_subnet_id` / `network_aks_subnet_id` / `network_aks_virtual_nodes_subnet_id` / `network_containerapps_subnet_id` / `network_func_subnet_id` / `network_apim_subnet_id` | Subnet IDs copied by consumer repos into their own GitHub variables |
 | `nsg_public_id` / `nsg_private_id` / `nsg_data_id` | NSG IDs |
 | `route_table_public_id` / `route_table_app_id` / `route_table_data_id` | Route table IDs |
 | `nat_gateway_id` / `nat_gateway_public_ip` | NAT Gateway resource ID and its egress IP |
