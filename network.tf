@@ -52,9 +52,12 @@ resource "azurerm_nat_gateway_public_ip_association" "this" {
 
 # Revision 2026-10-16 - segmentacion lateral: las reglas "Allow-VNet-Inbound"
 # (origen VirtualNetwork = cualquier recurso de la VNet) se reemplazaron por
-# origenes concretos. Se usan CIDR de subnet y no ASG porque estas subnets
-# alojan servicios PaaS gestionados (AKS, Container Apps, Function, nodos
-# virtuales). Los flujos permitidos son los previstos por el diseno; deben
+# origenes concretos. Se usan CIDR de subnet y no ASG porque cada subnet aloja
+# un solo rol (el CIDR equivale al rol) y los llamadores principales (APIM,
+# Function, Container Apps) no pueden pertenecer a un ASG. Si se quiere un
+# modelo "tipo Security Group", el provider SI admite ASG en Private
+# Endpoints y en los node pools de AKS (no en Container Apps, Function ni
+# APIM). Los flujos permitidos son los previstos por el diseno; deben
 # validarse al desplegar con los repos consumidores.
 # ============================================================================
 # Network Security Groups - una por subnet, mismas reglas que antes de esta
