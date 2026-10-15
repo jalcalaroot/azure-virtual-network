@@ -11,8 +11,31 @@ NSGs cannot be attached to the NICs of managed PaaS services (AKS nodes, Contain
 | `azure-container-apps` | `snet-containerapps` | 80, 443, 31080, 31443 from the Application Gateway; Azure Load Balancer; itself | `snet-appgw`, `AzureLoadBalancer`, itself | Project code: ingress `target_port` 80 and edge proxy |
 | `azure-docs-assistant` | `snet-apim` | 443 from the internet; 3443 management | `Internet`, `ApiManagement` | API Management VNet requirements (not re-verified) |
 | `azure-docs-assistant` | `snet-func` | none initiated from the VNet; itself | itself | Outbound-integration subnet |
-| any | `snet-privatelink` | **443** to Private Endpoints | `snet-apim`, `snet-func`, `snet-containerapps`, `snet-aks` | Cosmos DB, AI Foundry, Content Safety, Key Vault, storage, Function App; 1433 and 5432 also allowed from `snet-app` and `snet-data` |
+| see below | `snet-privatelink` | **443**, one rule per service, to that service's ASG | per service (below); `snet-app` and `snet-data` keep a broad rule (443, 1433, 5432) | Private Endpoints |
 | web tier | `snet-app` | 80, 443, 8080 from `snet-public` and `snet-appgw`; itself | as listed | |
 | data tier | `snet-data` | from the application subnets and replication | see `nsg-data` | |
+
+## Private Endpoints: one ASG per service
+
+`snet-privatelink` hosts the private endpoints of many services, so each one has its own Application Security Group (`asg-<service>`) and its own rule. The ASG is the **destination**; the **source** stays a subnet CIDR because API Management, Function App and Container Apps cannot be ASG members.
+
+| Rule (priority) | Source | Destination ASG | Port |
+|---|---|---|---|
+| `Allow-Apim-To-Function` (200) | `snet-apim` | `asg-function` | 443 |
+| `Allow-Func-To-Cosmos` (300) | `snet-func` | `asg-cosmos` | 443 |
+| `Allow-Func-To-Storage` (400) | `snet-func` | `asg-storage` | 443 |
+| `Allow-Func-To-AIFoundry` (500) | `snet-func` | `asg-ai-foundry` | 443 |
+| `Allow-Func-To-ContentSafety` (600) | `snet-func` | `asg-content-safety` | 443 |
+| `Allow-Apps-To-KeyVault` (700) | `snet-containerapps`, `snet-aks` | `asg-keyvault` | 443 |
+
+`asg-aks` is defined for the AKS node pool but no rule uses it yet (one node pool, one subnet).
+
+**Consumers must associate their resources.** A private endpoint that is not a member of its ASG matches none of these rules and is blocked. The IDs come from the output `application_security_group_ids`:
+
+- `azure-docs-assistant`: `application_security_group_associations` on the private endpoints of the Function App, its storage, Cosmos DB, AI Foundry and Content Safety (the AVM modules for Cosmos DB, the Function App, its storage and API Management accept it; AI Foundry and Content Safety use `azurerm_private_endpoint` directly, which needs `azurerm_private_endpoint_application_security_group_association`).
+- `azure-aks-cluster`: `node_network_profile.application_security_group_ids` on the node pool (the repo does not use it yet).
+- This repository associates its own Key Vault and storage endpoints.
+
+Not ASG members (not possible): API Management, the Function App outbound integration, Container Apps, Application Gateway, NAT Gateway and Application Insights.
 
 Flows are the intended design. They have not been validated on a deployment.

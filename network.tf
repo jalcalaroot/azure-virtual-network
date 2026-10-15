@@ -313,21 +313,81 @@ resource "azurerm_network_security_group" "privatelink" {
     destination_address_prefix = "VirtualNetwork"
   }
   # Revision 2026-10-16: con las politicas de red de la subnet activadas este
-  # NSG SI se aplica a la NIC de cada Private Endpoint, asi que cada servicio
-  # que llega a un endpoint necesita su regla. Solo 443 (Cosmos DB, AI Foundry,
-  # Content Safety, Key Vault, storage, Function App):
-  #   apim -> Function App; func -> Cosmos/AI/Storage/Content Safety;
-  #   containerapps -> Key Vault/storage; aks -> Key Vault/storage.
+  # NSG se aplica a la NIC de cada Private Endpoint. Una regla por servicio,
+  # con el ASG del servicio como destino (443). Prioridades con saltos de 100.
+  # La regla 100 de arriba (app y data hacia cualquier endpoint) se mantiene
+  # como respaldo del nivel de aplicacion y de datos.
+  # APIM llega solo a la Function App.
   security_rule {
-    name                       = "Allow-HTTPS-From-Service-Subnets"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefixes    = [var.apim_subnet_cidr, var.func_subnet_cidr, var.containerapps_subnet_cidr, var.aks_subnet_cidr]
-    destination_address_prefix = "VirtualNetwork"
+    name                                       = "Allow-Apim-To-Function"
+    priority                                   = 200
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.apim_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["function"].id]
+  }
+  # La Function llega a Cosmos DB.
+  security_rule {
+    name                                       = "Allow-Func-To-Cosmos"
+    priority                                   = 300
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.func_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["cosmos"].id]
+  }
+  # La Function llega al storage (host y estado de Durable Functions).
+  security_rule {
+    name                                       = "Allow-Func-To-Storage"
+    priority                                   = 400
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.func_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["storage"].id]
+  }
+  # La Function llega a AI Foundry (embeddings y chat).
+  security_rule {
+    name                                       = "Allow-Func-To-AIFoundry"
+    priority                                   = 500
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.func_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["ai-foundry"].id]
+  }
+  # La Function llega a Content Safety.
+  security_rule {
+    name                                       = "Allow-Func-To-ContentSafety"
+    priority                                   = 600
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.func_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["content-safety"].id]
+  }
+  # Container Apps y AKS llegan a Key Vault (certificados y secretos).
+  security_rule {
+    name                                       = "Allow-Apps-To-KeyVault"
+    priority                                   = 700
+    direction                                  = "Inbound"
+    access                                     = "Allow"
+    protocol                                   = "Tcp"
+    source_port_range                          = "*"
+    destination_port_range                     = "443"
+    source_address_prefixes                    = [var.containerapps_subnet_cidr, var.aks_subnet_cidr]
+    destination_application_security_group_ids = [azurerm_application_security_group.this["keyvault"].id]
   }
   security_rule {
     name                       = "Deny-All-Inbound"
