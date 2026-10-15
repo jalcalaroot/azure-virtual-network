@@ -309,6 +309,23 @@ resource "azurerm_network_security_group" "privatelink" {
     source_address_prefixes    = [var.app_subnet_cidr, var.data_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
+  # Revision 2026-10-16: con las politicas de red de la subnet activadas este
+  # NSG SI se aplica a la NIC de cada Private Endpoint, asi que cada servicio
+  # que llega a un endpoint necesita su regla. Solo 443 (Cosmos DB, AI Foundry,
+  # Content Safety, Key Vault, storage, Function App):
+  #   apim -> Function App; func -> Cosmos/AI/Storage/Content Safety;
+  #   containerapps -> Key Vault/storage; aks -> Key Vault/storage.
+  security_rule {
+    name                       = "Allow-HTTPS-From-Service-Subnets"
+    priority                   = 110
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "443"
+    source_address_prefixes    = [var.apim_subnet_cidr, var.func_subnet_cidr, var.containerapps_subnet_cidr, var.aks_subnet_cidr]
+    destination_address_prefix = "VirtualNetwork"
+  }
   security_rule {
     name                       = "Deny-All-Inbound"
     priority                   = 4096
@@ -623,7 +640,7 @@ module "vnet" {
       address_prefixes                  = [var.privatelink_subnet_cidr]
       default_outbound_access_enabled   = true
       network_security_group            = { id = azurerm_network_security_group.privatelink.id }
-      private_endpoint_network_policies = "Disabled"
+      private_endpoint_network_policies = "NetworkSecurityGroupEnabled" # el NSG de la subnet se aplica a la NIC de cada Private Endpoint (con "Disabled" no se aplicaba)
     }
     containerapps = {
       name                            = "snet-containerapps"
