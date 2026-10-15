@@ -17,6 +17,14 @@ data "azurerm_resource_group" "this" {
 # ============================================================================
 # NAT Gateway - compartido por app/aks. public/appgw/data no lo usan (ver
 # motivo de cada uno abajo).
+#
+# SKU StandardV2 (revision 2026-10-16): zona redundante sin costo extra. La
+# SKU Standard sin zona deja que Azure elija la zona y no protege frente a la
+# caida de una zona (Microsoft: "Reliability in Azure NAT Gateway"). StandardV2
+# exige IP publica StandardV2 y no se puede "actualizar" desde Standard: al
+# aplicar este cambio sobre una VNet ya desplegada el NAT Gateway y su IP se
+# RECREAN (cambia la IP publica de salida). No disponible en Canada East,
+# India South Central, Sweden South ni West India.
 # ============================================================================
 
 resource "azurerm_public_ip" "nat" {
@@ -24,7 +32,7 @@ resource "azurerm_public_ip" "nat" {
   location            = var.location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
-  sku                 = "Standard"
+  sku                 = "StandardV2"
   tags                = local.tags
 }
 
@@ -32,7 +40,7 @@ resource "azurerm_nat_gateway" "this" {
   name                    = "nat-gw-shared"
   location                = var.location
   resource_group_name     = var.resource_group_name
-  sku_name                = "Standard"
+  sku_name                = "StandardV2"
   idle_timeout_in_minutes = 4
   tags                    = local.tags
 }
@@ -42,6 +50,12 @@ resource "azurerm_nat_gateway_public_ip_association" "this" {
   public_ip_address_id = azurerm_public_ip.nat.id
 }
 
+# Revision 2026-10-16 - segmentacion lateral: las reglas "Allow-VNet-Inbound"
+# (origen VirtualNetwork = cualquier recurso de la VNet) se reemplazaron por
+# origenes concretos. Se usan CIDR de subnet y no ASG porque estas subnets
+# alojan servicios PaaS gestionados (AKS, Container Apps, Function, nodos
+# virtuales). Los flujos permitidos son los previstos por el diseno; deben
+# validarse al desplegar con los repos consumidores.
 # ============================================================================
 # Network Security Groups - una por subnet, mismas reglas que antes de esta
 # migracion (nada cambia a nivel de seguridad real).
@@ -170,15 +184,16 @@ resource "azurerm_network_security_group" "private" {
     source_address_prefixes    = [var.public_subnet_cidr, var.appgw_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
+  # Antes: Allow-VNet-Inbound (toda la VNet). Ahora solo la propia subnet; los llamadores externos entran por Allow-From-Public-Subnets.
   security_rule {
-    name                       = "Allow-VNet-Inbound"
+    name                       = "Allow-Intra-Subnet"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefixes    = [var.app_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
   security_rule {
@@ -252,15 +267,16 @@ resource "azurerm_network_security_group" "aks" {
     source_address_prefix      = "AzureLoadBalancer"
     destination_address_prefix = "*"
   }
+  # Antes: Allow-VNet-Inbound. Ahora: nodos, nodos virtuales (ACI) y App Gateway (AGIC).
   security_rule {
-    name                       = "Allow-VNet-Inbound"
+    name                       = "Allow-AKS-Internal-And-AppGateway"
     priority                   = 110
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefixes    = [var.aks_subnet_cidr, var.aks_virtual_nodes_subnet_cidr, var.appgw_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
   security_rule {
@@ -344,15 +360,16 @@ resource "azurerm_network_security_group" "containerapps" {
     source_address_prefix      = var.appgw_subnet_cidr
     destination_address_prefix = "*"
   }
+  # Antes: Allow-VNet-Inbound. App Gateway ya tiene su regla propia arriba.
   security_rule {
-    name                       = "Allow-VNet-Inbound"
+    name                       = "Allow-Intra-Subnet"
     priority                   = 120
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefixes    = [var.containerapps_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
   security_rule {
@@ -374,15 +391,16 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
   resource_group_name = var.resource_group_name
   tags                = local.tags
 
+  # Antes: Allow-VNet-Inbound. Ahora solo AKS y la propia subnet.
   security_rule {
-    name                       = "Allow-VNet-Inbound"
+    name                       = "Allow-AKS-And-Intra-Subnet"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefixes    = [var.aks_subnet_cidr, var.aks_virtual_nodes_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
   security_rule {
@@ -410,15 +428,16 @@ resource "azurerm_network_security_group" "func" {
   resource_group_name = var.resource_group_name
   tags                = local.tags
 
+  # Antes: Allow-VNet-Inbound. La subnet es de integracion saliente: nadie de la VNet debe iniciar trafico hacia ella.
   security_rule {
-    name                       = "Allow-VNet-Inbound"
+    name                       = "Allow-Intra-Subnet"
     priority                   = 100
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
     source_port_range          = "*"
     destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
+    source_address_prefixes    = [var.func_subnet_cidr]
     destination_address_prefix = "VirtualNetwork"
   }
   security_rule {
@@ -579,7 +598,7 @@ module "vnet" {
     app = {
       name                            = "snet-app"
       address_prefixes                = [var.app_subnet_cidr]
-      default_outbound_access_enabled = true
+      default_outbound_access_enabled = false # privada: la salida a internet es SOLO por el NAT Gateway (explicita)
       network_security_group          = { id = azurerm_network_security_group.private.id }
       route_table                     = { id = azurerm_route_table.app.id }
       nat_gateway                     = { id = azurerm_nat_gateway.this.id }
@@ -587,14 +606,14 @@ module "vnet" {
     data = {
       name                            = "snet-data"
       address_prefixes                = [var.data_subnet_cidr]
-      default_outbound_access_enabled = true # el route table (block-internet) es lo que realmente bloquea el egreso, no este flag
+      default_outbound_access_enabled = false # privada: sin salida implicita, ademas de la ruta block-internet (defensa en profundidad)
       network_security_group          = { id = azurerm_network_security_group.data.id }
       route_table                     = { id = azurerm_route_table.data.id }
     }
     aks = {
       name                            = "snet-aks"
       address_prefixes                = [var.aks_subnet_cidr]
-      default_outbound_access_enabled = true
+      default_outbound_access_enabled = false # privada: la salida a internet es SOLO por el NAT Gateway (explicita)
       network_security_group          = { id = azurerm_network_security_group.aks.id }
       route_table                     = { id = azurerm_route_table.aks.id }
       nat_gateway                     = { id = azurerm_nat_gateway.this.id }
@@ -609,7 +628,7 @@ module "vnet" {
     containerapps = {
       name                            = "snet-containerapps"
       address_prefixes                = [var.containerapps_subnet_cidr]
-      default_outbound_access_enabled = true
+      default_outbound_access_enabled = false # privada: solo aloja Private Endpoints, no necesita salida
       network_security_group          = { id = azurerm_network_security_group.containerapps.id }
       route_table                     = { id = azurerm_route_table.containerapps.id }
       nat_gateway                     = { id = azurerm_nat_gateway.this.id }
