@@ -174,3 +174,8 @@ output "network_log_analytics_workspace_id" {
   description = "Log Analytics workspace de la red, para diagnostic settings de otros proyectos"
   value       = azurerm_log_analytics_workspace.this.id
 }
+
+output "application_security_group_ids" {
+  description = "IDs de los ASG por servicio (clave = servicio). Los repos consumidores asocian sus Private Endpoints y node pools con estos IDs."
+  value       = { for k, v in azurerm_application_security_group.this : k => v.id }
+}

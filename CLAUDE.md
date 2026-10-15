@@ -157,3 +157,13 @@ Revisión del diseño contra la documentación de Microsoft (salida por defecto,
 Decisión del usuario: la **salida queda abierta**; la entrada solo abre los puertos que cada servicio necesita. Un NSG a nivel de NIC no es posible en los servicios PaaS gestionados (AKS, Container Apps, Function, APIM): el NSG de su subnet es el control. La tabla de flujos por proyecto está en `docs/port-contract.md`. Los proyectos antiguos de la carpeta `xtratus` (VMs, otra organización y suscripción) quedaron **fuera** por decisión del usuario.
 
 **Corrección (2026-10-16):** una versión anterior de esta sección decía que los ASG "no aplican a PaaS gestionado". Es falso para **Private Endpoints** (`azurerm_private_endpoint_application_security_group_association`) y **node pools de AKS** (`node_network_profile.application_security_group_ids`, AKS 1.29 o superior). No aplican a Container Apps, Function App ni APIM. Un modelo "tipo Security Group de AWS" es viable para el destino en `privatelink` y en `aks`; con una sola función por subnet aporta poco frente al CIDR, y añade acoplamiento entre repos (el ASG se crea aquí y cada repo consumidor debe asociarlo, o su tráfico queda bloqueado).
+
+## Application Security Groups (2026-10-16, aprobado por el usuario)
+
+Un ASG por servicio con nombre `asg-<servicio>` (`asg-keyvault`, `asg-cosmos`, `asg-storage`, `asg-function`, `asg-ai-foundry`, `asg-content-safety`, `asg-aks`), definidos en `asg.tf`. Se usan como **destino** en `nsg-privatelink` (una regla por servicio, prioridades con saltos de 100); el origen sigue siendo el CIDR de subnet. Este repo asocia sus propios Private Endpoints (Key Vault y storage) y expone el output `application_security_group_ids` para los demás.
+
+- **Acoplamiento:** un Private Endpoint no asociado a su ASG queda bloqueado en silencio. Falta asociar los endpoints de `azure-docs-assistant` (Function, storage, Cosmos, AI Foundry, Content Safety) y el node pool de `azure-aks-cluster` en sus repos: **etapa 2, sin hacer**.
+- La regla amplia `Allow-From-App-And-Data-Subnets` (app y data hacia cualquier endpoint) se mantiene como respaldo.
+- Sin ASG (no pueden pertenecer a uno): APIM, integración de salida de la Function, Container Apps, Application Gateway, NAT Gateway y Application Insights.
+- Los módulos AVM de este repo (Key Vault y storage) aceptan `application_security_group_associations`: verificado. El resto de módulos de los otros repos: Cosmos, Function App, su storage, APIM y ACR también; Container Apps y Application Insights no.
+- **No validado en un despliegue.**
