@@ -831,14 +831,14 @@ module "vnet" {
     privatelink = {
       name                              = "snet-privatelink"
       address_prefixes                  = [var.privatelink_subnet_cidr]
-      default_outbound_access_enabled   = true
+      default_outbound_access_enabled   = false # privada: solo aloja Private Endpoints, no necesita salida
       network_security_group            = { id = azurerm_network_security_group.privatelink.id }
       private_endpoint_network_policies = "NetworkSecurityGroupEnabled" # el NSG de la subnet se aplica a la NIC de cada Private Endpoint (con "Disabled" no se aplicaba)
     }
     containerapps = {
       name                            = "snet-containerapps"
       address_prefixes                = [var.containerapps_subnet_cidr]
-      default_outbound_access_enabled = false # privada: solo aloja Private Endpoints, no necesita salida
+      default_outbound_access_enabled = true
       network_security_group          = { id = azurerm_network_security_group.containerapps.id }
       route_table                     = { id = azurerm_route_table.containerapps.id }
       nat_gateway                     = { id = azurerm_nat_gateway.this.id }

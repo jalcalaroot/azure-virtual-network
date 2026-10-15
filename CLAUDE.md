@@ -167,3 +167,19 @@ Un ASG por servicio con nombre `asg-<servicio>` (`asg-keyvault`, `asg-cosmos`, `
 - Sin ASG (no pueden pertenecer a uno): APIM, integración de salida de la Function, Container Apps, Application Gateway, NAT Gateway y Application Insights.
 - Los módulos AVM de este repo (Key Vault y storage) aceptan `application_security_group_associations`: verificado. El resto de módulos de los otros repos: Cosmos, Function App, su storage, APIM y ACR también; Container Apps y Application Insights no.
 - **No validado en un despliegue.**
+
+## Despliegue de validación (2026-10-16)
+
+La VNet se **desplegó desde la rama `harden-vnet-baseline`** (71 recursos) para validar los cambios de la revisión de buenas prácticas, y quedó **arriba** (con costo). Resultados, comprobados contra Azure con lecturas:
+
+- NAT Gateway y su IP pública: `StandardV2` aceptado por la API.
+- NSG: 10, con nombre `nsg-snet-<subnet>`, prioridades de entrada en saltos de 100 y regla `Allow-All-Outbound` (100) explícita en todos.
+- `nsg-snet-privatelink`: las 6 reglas por servicio con ASG como destino quedaron como se diseñaron; `snet-privatelink` con `privateEndpointNetworkPolicies = NetworkSecurityGroupEnabled`.
+- 7 ASG creados; los Private Endpoints de Key Vault (`asg-keyvault`) y de storage blob y dfs (`asg-storage`) son miembros.
+- Subnets privadas (`defaultOutboundAccess = false`): `app`, `data`, `aks` y `privatelink`. Las demás conservan la salida por defecto.
+- Las 2 identidades de CI recuperaron sus 4 roles cada una.
+- `terraform plan` posterior: sin cambios.
+
+**Error propio corregido durante el despliegue:** una edición mía puso `false` en `containerapps` (delegada, debía quedar en `true`) en lugar de en `privatelink`, porque mi expresión no encontró la línea por una diferencia de espaciado; se detectó al comparar el código con el valor real en Azure y se corrigió con 2 cambios en sitio.
+
+**Otro hallazgo:** crear las 10 subnets en paralelo dio `409 AnotherOperationInProgress`; con `-parallelism=1` se completó. Sigue sin validarse el comportamiento con los servicios consumidores (AKS en subnet privada, flujos reales con la Function y APIM).
