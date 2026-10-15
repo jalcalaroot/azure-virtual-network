@@ -13,7 +13,7 @@ NSGs cannot be attached to the NICs of managed PaaS services (AKS nodes, Contain
 | `azure-docs-assistant` | `snet-func` | none initiated from the VNet; itself | itself | Outbound-integration subnet |
 | see below | `snet-privatelink` | **443**, one rule per service, to that service's ASG | per service (below); `snet-app` and `snet-data` keep a broad rule (443, 1433, 5432) | Private Endpoints |
 | web tier | `snet-app` | 80, 443, 8080 from `snet-public` and `snet-appgw`; itself | as listed | |
-| data tier | `snet-data` | from the application subnets and replication | see `nsg-data` | |
+| data tier | `snet-data` | from the application subnets and replication | see `nsg-snet-data` | |
 
 ## Private Endpoints: one ASG per service
 
