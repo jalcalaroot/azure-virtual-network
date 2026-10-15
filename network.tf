@@ -66,7 +66,7 @@ resource "azurerm_nat_gateway_public_ip_association" "this" {
 
 resource "azurerm_network_security_group" "public" {
   #checkov:skip=CKV_AZURE_160:80 se mantiene por diseño para el redirect HTTP->HTTPS que hace App Gateway - el trafico plano no llega a los backends, App Gateway lo redirige antes.
-  name                = "nsg-public"
+  name                = "nsg-snet-public"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -84,7 +84,7 @@ resource "azurerm_network_security_group" "public" {
   }
   security_rule {
     name                       = "Allow-HTTP-Inbound"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -104,11 +104,24 @@ resource "azurerm_network_security_group" "public" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "appgw" {
-  #checkov:skip=CKV_AZURE_160:80 se mantiene por diseño para el redirect HTTP->HTTPS que hace App Gateway - mismo motivo que nsg-public.
-  name                = "nsg-appgw"
+  #checkov:skip=CKV_AZURE_160:80 se mantiene por diseño para el redirect HTTP->HTTPS que hace App Gateway - mismo motivo que nsg-snet-public.
+  name                = "nsg-snet-appgw"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -126,7 +139,7 @@ resource "azurerm_network_security_group" "appgw" {
   }
   security_rule {
     name                       = "Allow-Internet-HTTP"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -137,7 +150,7 @@ resource "azurerm_network_security_group" "appgw" {
   }
   security_rule {
     name                       = "Allow-Internet-HTTPS"
-    priority                   = 111
+    priority                   = 300
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -148,7 +161,7 @@ resource "azurerm_network_security_group" "appgw" {
   }
   security_rule {
     name                       = "Allow-AzureLoadBalancer"
-    priority                   = 120
+    priority                   = 400
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
@@ -168,10 +181,23 @@ resource "azurerm_network_security_group" "appgw" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "private" {
-  name                = "nsg-private"
+  name                = "nsg-snet-app"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -190,7 +216,7 @@ resource "azurerm_network_security_group" "private" {
   # Antes: Allow-VNet-Inbound (toda la VNet). Ahora solo la propia subnet; los llamadores externos entran por Allow-From-Public-Subnets.
   security_rule {
     name                       = "Allow-Intra-Subnet"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
@@ -210,10 +236,23 @@ resource "azurerm_network_security_group" "private" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "data" {
-  name                = "nsg-data"
+  name                = "nsg-snet-data"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -231,7 +270,7 @@ resource "azurerm_network_security_group" "data" {
   }
   security_rule {
     name                       = "Allow-VNet-Replication"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -251,10 +290,23 @@ resource "azurerm_network_security_group" "data" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "aks" {
-  name                = "nsg-aks"
+  name                = "nsg-snet-aks"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -273,7 +325,7 @@ resource "azurerm_network_security_group" "aks" {
   # Antes: Allow-VNet-Inbound. Ahora: nodos, nodos virtuales (ACI) y App Gateway (AGIC).
   security_rule {
     name                       = "Allow-AKS-Internal-And-AppGateway"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
@@ -293,10 +345,23 @@ resource "azurerm_network_security_group" "aks" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "privatelink" {
-  name                = "nsg-privatelink"
+  name                = "nsg-snet-privatelink"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -400,6 +465,19 @@ resource "azurerm_network_security_group" "privatelink" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 # containerapps/aks_virtual_nodes: hasta 2026-09-29 vivian como bolt-ons
@@ -410,7 +488,7 @@ resource "azurerm_network_security_group" "privatelink" {
 # no tiene otros consumidores a los que romper, asi que se unificaron en el
 # mismo mapa subnets de abajo, igual que public/appgw/app/data/aks/privatelink.
 resource "azurerm_network_security_group" "containerapps" {
-  name                = "nsg-containerapps"
+  name                = "nsg-snet-containerapps"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -431,7 +509,7 @@ resource "azurerm_network_security_group" "containerapps" {
   # directo a este subnet.
   security_rule {
     name                       = "Allow-AppGateway-To-Edge-Proxy"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -443,7 +521,7 @@ resource "azurerm_network_security_group" "containerapps" {
   # Antes: Allow-VNet-Inbound. App Gateway ya tiene su regla propia arriba.
   security_rule {
     name                       = "Allow-Intra-Subnet"
-    priority                   = 120
+    priority                   = 300
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "*"
@@ -463,10 +541,23 @@ resource "azurerm_network_security_group" "containerapps" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 resource "azurerm_network_security_group" "aks_virtual_nodes" {
-  name                = "nsg-aks-virtual-nodes"
+  name                = "nsg-snet-aks-virtual-nodes"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -494,6 +585,19 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 # Agregada 2026-09-30: ningun subnet existente hasta ahora tenia delegation
@@ -503,7 +607,7 @@ resource "azurerm_network_security_group" "aks_virtual_nodes" {
 # ni appgw sirven. Mismo patron minimo que aks_virtual_nodes (subnet
 # delegada, sin trafico inbound iniciado desde afuera de la VNet).
 resource "azurerm_network_security_group" "func" {
-  name                = "nsg-func"
+  name                = "nsg-snet-func"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -531,6 +635,19 @@ resource "azurerm_network_security_group" "func" {
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }
 }
 
 # Agregada 2026-10-03 para API Management (tier Developer) en modo VNet
@@ -551,7 +668,7 @@ resource "azurerm_network_security_group" "func" {
 # Developer. Internet sigue bloqueado por la regla por defecto
 # DenyAllInbound (65500) salvo el 443 permitido arriba.
 resource "azurerm_network_security_group" "apim" {
-  name                = "nsg-apim"
+  name                = "nsg-snet-apim"
   location            = var.location
   resource_group_name = var.resource_group_name
   tags                = local.tags
@@ -569,7 +686,7 @@ resource "azurerm_network_security_group" "apim" {
   }
   security_rule {
     name                       = "Allow-ApiManagement-Management"
-    priority                   = 110
+    priority                   = 200
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
@@ -577,6 +694,19 @@ resource "azurerm_network_security_group" "apim" {
     destination_port_range     = "3443"
     source_address_prefix      = "ApiManagement"
     destination_address_prefix = "VirtualNetwork"
+  }
+  # Salida abierta de forma explicita (decision del proyecto): equivale a la
+  # regla de salida de una NACL; antes dependia de la regla por defecto 65001.
+  security_rule {
+    name                       = "Allow-All-Outbound"
+    priority                   = 100
+    direction                  = "Outbound"
+    access                     = "Allow"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
   }
 }
 
