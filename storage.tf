@@ -132,12 +132,18 @@ module "storage_data" {
       subnet_resource_id            = module.vnet.subnets["privatelink"].resource_id
       subresource_name              = "blob"
       private_dns_zone_resource_ids = [azurerm_private_dns_zone.blob.id]
+      application_security_group_associations = {
+        storage = azurerm_application_security_group.this["storage"].id
+      }
     }
     dfs = {
       name                          = "pe-${var.storage_account_name}-dfs"
       subnet_resource_id            = module.vnet.subnets["privatelink"].resource_id
       subresource_name              = "dfs"
       private_dns_zone_resource_ids = [azurerm_private_dns_zone.dfs.id]
+      application_security_group_associations = {
+        storage = azurerm_application_security_group.this["storage"].id
+      }
     }
   }
 

@@ -108,7 +108,7 @@ Mismo fix ya aplicado en `azure-container-apps`/`azure-aks-cluster`/`aws-eks-clu
 Gap real encontrado escribiendo `azure-agent-platform` (proyecto nuevo, RAG platform): ese repo necesita VNet integration (outbound) para un Function App en plan Flex Consumption, y **ninguna subnet existente hasta ese momento tenia delegation a `Microsoft.Web/serverFarms`** - cada subnet solo admite una sola delegation, asi que ni `privatelink` (delegada a Private Endpoints) ni `appgw` (sin delegation pero reservada para Application Gateway) servian. Se agrego una subnet nueva siguiendo exactamente el mismo patron ya usado para `containerapps`/`aks_virtual_nodes` (bolt-on delegado, con su propia NSG minima - `Allow-VNet-Inbound` + `Deny-All-Inbound` - y asociada al NAT Gateway compartido para egress controlado, sin route table propia):
 
 - `func_subnet_cidr` default `10.0.73.0/24` (el siguiente bloque libre despues de `aks_virtual_nodes_subnet_cidr`, que termina en `10.0.72.255`)
-- `nsg-func`, mismo criterio que `nsg-aks-virtual-nodes` (subnet delegada, sin trafico inbound iniciado desde afuera de la VNet)
+- `nsg-snet-func`, mismo criterio que `nsg-snet-aks-virtual-nodes` (subnet delegada, sin trafico inbound iniciado desde afuera de la VNet)
 - `delegations = [{ name = "funcDelegation", service_delegation = { name = "Microsoft.App/environments" } }]`
 - Outputs nuevos: `func_subnet_id` y `network_func_subnet_id` (este ultimo es el que copia `azure-agent-platform` a su variable `network_function_app_subnet_id`)
 
@@ -122,12 +122,12 @@ Aplicado contra la VNet ya desplegada - agrega 1 subnet + 1 NSG, no destruye ni 
 
 - `apim_subnet_cidr` default `10.0.74.0/24` (siguiente bloque libre despues de `func`, 10.0.73.0/24). Minimo exigido por Microsoft: /29; con el tier Developer usa una sola IP.
 - **Sin delegation** - la doc de APIM dice explicitamente que la subnet "shouldn't have any delegations enabled" (a diferencia de `func`, `containerapps` y `aks_virtual_nodes`).
-- `nsg-apim` con las reglas minimas de entrada para modo External: `Internet` -> 443 y `ApiManagement` -> 3443 (plano de administracion), **sin** `Deny-All-Inbound` (ver correccion abajo). El outbound que APIM necesita (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este archivo, que no definen reglas de salida. `AzureLoadBalancer`:6390 no hace falta en Developer.
+- `nsg-snet-apim` con las reglas minimas de entrada para modo External: `Internet` -> 443 y `ApiManagement` -> 3443 (plano de administracion), **sin** `Deny-All-Inbound` (ver correccion abajo). El outbound que APIM necesita (Storage, SQL, Key Vault, Azure Monitor, Entra ID) lo cubre el allow-all por defecto de Azure, mismo criterio que el resto de NSGs de este archivo, que no definen reglas de salida. `AzureLoadBalancer`:6390 no hace falta en Developer.
 - Sin NAT Gateway ni route table asociados: APIM con IP publica gestionada por Azure sale por su propia IP, y no hay motivo para forzarlo por el NAT compartido.
 - Outputs nuevos: `apim_subnet_id` y `network_apim_subnet_id` (el que copia `azure-agent-platform` a `network_apim_subnet_id`).
 
 
-**Correccion 2026-10-03:** `nsg-apim` se creo con un `Deny-All-Inbound` (4096) como el resto de NSGs de este archivo, y API Management fallo dos veces seguidas con `ActivationFailed` (primero con IP gestionada, luego con IP publica propia, sin detalle en el activity log). Un deny explicito anula las reglas por defecto de Azure `AllowVnetInBound` y `AllowAzureLoadBalancerInBound`, que la plataforma de APIM usa para los health probes de su load balancer interno y el trafico entre nodos - aunque la doc diga que `AzureLoadBalancer`:6390 "no se requiere" en Developer. Se quito el deny de `nsg-apim` (Internet sigue bloqueado por la regla por defecto `DenyAllInbound` 65500, salvo el 443 y el 3443 permitidos). Aplicado contra la VNet real (1 cambio, solo esa NSG, via `-target`).
+**Correccion 2026-10-03:** `nsg-snet-apim` se creo con un `Deny-All-Inbound` (4096) como el resto de NSGs de este archivo, y API Management fallo dos veces seguidas con `ActivationFailed` (primero con IP gestionada, luego con IP publica propia, sin detalle en el activity log). Un deny explicito anula las reglas por defecto de Azure `AllowVnetInBound` y `AllowAzureLoadBalancerInBound`, que la plataforma de APIM usa para los health probes de su load balancer interno y el trafico entre nodos - aunque la doc diga que `AzureLoadBalancer`:6390 "no se requiere" en Developer. Se quito el deny de `nsg-snet-apim` (Internet sigue bloqueado por la regla por defecto `DenyAllInbound` 65500, salvo el 443 y el 3443 permitidos). Aplicado contra la VNet real (1 cambio, solo esa NSG, via `-target`).
 
 Solo codigo - no aplicado: la VNet esta destruida en Azure desde 2026-09-30. Mergear a `main` dispara `terraform-apply.yml` y recrea toda la red.
 
@@ -141,3 +141,45 @@ Solo codigo - no aplicado: la VNet esta destruida en Azure desde 2026-09-30. Mer
 - 2026-09-03: Checkov → SARIF → GitHub Security tab (free, public repo). `.pre-commit-config.yaml` added (gitleaks + `terraform fmt`) so secrets/formatting get caught locally, not just in CI. All 15 pre-existing Checkov exceptions dismissed in the Security tab with reasons/comments (see gotcha above) — 0 open alerts.
 - 2026-09-02: DevSecOps hardening - tflint+Checkov+gitleaks in CI, branch protection on `main`, both storage accounts hardened (public access, TLS, retention, SAS policy, shared-key auth on the data storage account). Tagged `v0.2.0`.
 - 2026-09-02: Repo created. Full design validated with a real `terraform plan` against the `jalcalaroot` subscription (55 resources, clean, not yet applied). Tagged `v0.1.0`. Not yet wired into `jalcalaroot-azure-bootstrap/environments/dev` — that's the next step whenever real deployment is wanted (creates a NAT Gateway, Key Vault, Storage Account - real cost).
+
+## Revisión de buenas prácticas de red (2026-10-16)
+
+Revisión del diseño contra la documentación de Microsoft (salida por defecto, resiliencia del NAT Gateway, segmentación, flow logs). Cambios aplicados en la rama `harden-vnet-baseline`; **nada se ha desplegado** (la VNet está dada de baja) y los flujos nuevos no se han probado.
+
+1. **Subnets privadas** (`default_outbound_access_enabled = false`) en `app`, `data`, `aks` y `privatelink`. Se dejan en `true`: `public` (su ruta `to-internet` con siguiente salto `Internet` se rompe en una subnet privada), `appgw` y `apim` (subnets gestionadas por PaaS) y las delegadas (`containerapps`, `func`, `aks_virtual_nodes`): la documentación indica que las subnets privadas no aplican a subnets delegadas o gestionadas. Riesgo conocido: `aks` privada no se ha probado con el repo `azure-aks-cluster`.
+2. **NAT Gateway `StandardV2`** con IP pública `StandardV2` (zona redundante, mismo precio). No se puede actualizar desde Standard: al aplicarlo sobre una VNet ya desplegada se recrean el NAT y su IP (cambia la IP pública de salida). `terraform validate` lo acepta con azurerm 4.81; que la API lo acepte con esta combinación solo se sabe al aplicar.
+3. **Segmentación lateral:** las reglas `Allow-VNet-Inbound` (origen = toda la VNet) se sustituyeron por CIDR concretos de subnet (no ASG por ahora: cada subnet aloja un solo rol, y APIM, Function y Container Apps no pueden pertenecer a un ASG; el provider sí admite ASG en Private Endpoints y node pools de AKS, ver abajo). Flujos asumidos, a validar: `app` solo recibe de la propia subnet (más `public` y `appgw` por su regla); `aks` de nodos, nodos virtuales y `appgw`; `containerapps` y `func` solo de su propia subnet; `aks_virtual_nodes` de `aks` y propia.
+
+**Hallazgo 4, verificado en la documentación y corregido en esta rama:** `snet-privatelink` tenía `private_endpoint_network_policies = "Disabled"`, y con ese valor Azure **no aplica el NSG a los Private Endpoints**: `nsg-snet-privatelink` no filtraba. Ahora vale `NetworkSecurityGroupEnabled`, así que el NSG se aplica a la NIC de cada Private Endpoint, y se añadió la regla `Allow-HTTPS-From-Service-Subnets` (443 desde `apim`, `func`, `containerapps` y `aks`), porque antes solo `app` y `data` tenían regla y habrían quedado bloqueados el resto. No probado en un despliegue.
+
+## Contrato de puertos (2026-10-16)
+
+Decisión del usuario: la **salida queda abierta**; la entrada solo abre los puertos que cada servicio necesita. Un NSG a nivel de NIC no es posible en los servicios PaaS gestionados (AKS, Container Apps, Function, APIM): el NSG de su subnet es el control. La tabla de flujos por proyecto está en `docs/port-contract.md`. Los proyectos antiguos de la carpeta `xtratus` (VMs, otra organización y suscripción) quedaron **fuera** por decisión del usuario.
+
+**Corrección (2026-10-16):** una versión anterior de esta sección decía que los ASG "no aplican a PaaS gestionado". Es falso para **Private Endpoints** (`azurerm_private_endpoint_application_security_group_association`) y **node pools de AKS** (`node_network_profile.application_security_group_ids`, AKS 1.29 o superior). No aplican a Container Apps, Function App ni APIM. Un modelo "tipo Security Group de AWS" es viable para el destino en `privatelink` y en `aks`; con una sola función por subnet aporta poco frente al CIDR, y añade acoplamiento entre repos (el ASG se crea aquí y cada repo consumidor debe asociarlo, o su tráfico queda bloqueado).
+
+## Application Security Groups (2026-10-16, aprobado por el usuario)
+
+Un ASG por servicio con nombre `asg-<servicio>` (`asg-keyvault`, `asg-cosmos`, `asg-storage`, `asg-function`, `asg-ai-foundry`, `asg-content-safety`, `asg-aks`), definidos en `asg.tf`. Se usan como **destino** en `nsg-snet-privatelink` (una regla por servicio, prioridades con saltos de 100); el origen sigue siendo el CIDR de subnet. Este repo asocia sus propios Private Endpoints (Key Vault y storage) y expone el output `application_security_group_ids` para los demás.
+
+- **Acoplamiento:** un Private Endpoint no asociado a su ASG queda bloqueado en silencio. Falta asociar los endpoints de `azure-docs-assistant` (Function, storage, Cosmos, AI Foundry, Content Safety) y el node pool de `azure-aks-cluster` en sus repos: **etapa 2, sin hacer**.
+- La regla amplia `Allow-From-App-And-Data-Subnets` (app y data hacia cualquier endpoint) se mantiene como respaldo.
+- Sin ASG (no pueden pertenecer a uno): APIM, integración de salida de la Function, Container Apps, Application Gateway, NAT Gateway y Application Insights.
+- Los módulos AVM de este repo (Key Vault y storage) aceptan `application_security_group_associations`: verificado. El resto de módulos de los otros repos: Cosmos, Function App, su storage, APIM y ACR también; Container Apps y Application Insights no.
+- **No validado en un despliegue.**
+
+## Despliegue de validación (2026-10-16)
+
+La VNet se **desplegó desde la rama `harden-vnet-baseline`** (71 recursos) para validar los cambios de la revisión de buenas prácticas, y quedó **arriba** (con costo). Resultados, comprobados contra Azure con lecturas:
+
+- NAT Gateway y su IP pública: `StandardV2` aceptado por la API.
+- NSG: 10, con nombre `nsg-snet-<subnet>`, prioridades de entrada en saltos de 100 y regla `Allow-All-Outbound` (100) explícita en todos.
+- `nsg-snet-privatelink`: las 6 reglas por servicio con ASG como destino quedaron como se diseñaron; `snet-privatelink` con `privateEndpointNetworkPolicies = NetworkSecurityGroupEnabled`.
+- 7 ASG creados; los Private Endpoints de Key Vault (`asg-keyvault`) y de storage blob y dfs (`asg-storage`) son miembros.
+- Subnets privadas (`defaultOutboundAccess = false`): `app`, `data`, `aks` y `privatelink`. Las demás conservan la salida por defecto.
+- Las 2 identidades de CI recuperaron sus 4 roles cada una.
+- `terraform plan` posterior: sin cambios.
+
+**Error propio corregido durante el despliegue:** una edición mía puso `false` en `containerapps` (delegada, debía quedar en `true`) en lugar de en `privatelink`, porque mi expresión no encontró la línea por una diferencia de espaciado; se detectó al comparar el código con el valor real en Azure y se corrigió con 2 cambios en sitio.
+
+**Otro hallazgo:** crear las 10 subnets en paralelo dio `409 AnotherOperationInProgress`; con `-parallelism=1` se completó. Sigue sin validarse el comportamiento con los servicios consumidores (AKS en subnet privada, flujos reales con la Function y APIM).

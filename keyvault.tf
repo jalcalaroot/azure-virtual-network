@@ -54,6 +54,9 @@ module "key_vault" {
     vault = {
       subnet_resource_id            = module.vnet.subnets["privatelink"].resource_id
       private_dns_zone_resource_ids = [azurerm_private_dns_zone.vaultcore.id]
+      application_security_group_associations = {
+        keyvault = azurerm_application_security_group.this["keyvault"].id
+      }
     }
   }
 
