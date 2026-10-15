@@ -32,8 +32,9 @@ resource "azurerm_public_ip" "nat" {
   location            = var.location
   resource_group_name = var.resource_group_name
   allocation_method   = "Static"
-  # tflint-ignore: azurerm_public_ip_invalid_sku - la regla del ruleset no conoce StandardV2 (Azure lo acepta: desplegado y verificado el 2026-10-16)
-  sku  = "StandardV2"
+  # La regla azurerm_public_ip_invalid_sku del ruleset de tflint no conoce
+  # StandardV2; Azure lo acepta (desplegado y verificado el 2026-10-16).
+  sku  = "StandardV2" # tflint-ignore: azurerm_public_ip_invalid_sku
   tags = local.tags
 }
 
