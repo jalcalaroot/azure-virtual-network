@@ -28,7 +28,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "vaultcore" {
 module "key_vault" {
   #checkov:skip=CKV_TF_1:pinned por version semver del Terraform Registry, no un git tag - ver el mismo skip en network.tf para el detalle completo.
   source  = "Azure/avm-res-keyvault-vault/azurerm"
-  version = "0.11.0"
+  version = "0.12.0"
 
   #checkov:skip=CKV_AZURE_110:purge protection deliberadamente off (ver comentario de la linea de abajo) - habilitarla es irreversible y bloquea el ciclo destroy/recreate frecuente de este proyecto.
   #checkov:skip=CKV_AZURE_42:mismo motivo que CKV_AZURE_110 - "recuperable" implica purge protection, que esta off a proposito aca.
