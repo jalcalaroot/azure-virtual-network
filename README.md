@@ -35,7 +35,7 @@ The Azure network layer (VNet, subnets, NSGs, route tables, NAT Gateway, Key Vau
 | NAT Gateway | Outbound internet for private subnets | [NAT Gateway overview](https://learn.microsoft.com/en-us/azure/nat-gateway/nat-overview) |
 | Key Vault (Private Endpoint) | Shared secrets storage, no public network access; built on [`Azure/avm-res-keyvault-vault` v0.11.0](https://registry.terraform.io/modules/Azure/avm-res-keyvault-vault/azurerm/0.11.0) | [Private Link overview](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview) |
 | 2 Storage Accounts (Private Endpoints) | Data + flow-logs storage, no public network access; built on [`Azure/avm-res-storage-storageaccount` v0.10.0](https://registry.terraform.io/modules/Azure/avm-res-storage-storageaccount/azurerm/0.10.0) | [Private Link overview](https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview) |
-| Log Analytics Workspace + Flow Logs | Network traffic observability | [NSG flow logs](https://learn.microsoft.com/en-us/azure/network-watcher/network-watcher-nsg-flow-logging-overview) |
+| Log Analytics Workspace + Flow Logs | Network traffic observability: VNet flow log, diagnostics for the 10 NSGs and the NAT Gateway public IP | [NSG flow logs](https://learn.microsoft.com/en-us/azure/network-watcher/network-watcher-nsg-flow-logging-overview) |
 | Private DNS Zones | Resolution for the Private Endpoints above | [Azure Private DNS](https://learn.microsoft.com/en-us/azure/dns/private-dns-overview) |
 
 ## Prerequisites
@@ -97,7 +97,7 @@ GitHub Actions, authenticated to Azure via OIDC (Workload Identity Federation) �
 | Workflow | Trigger | Identity | What it does |
 |---|---|---|---|
 | `terraform-plan.yml` | Pull request | `virtual-network-plan` (read-only) | `fmt -check`, `validate`, tflint, Checkov (blocking), `plan`, posts the plan as a PR comment |
-| `terraform-apply.yml` | Push to `main` | `virtual-network-agent` | `plan` + `apply` |
+| `terraform-apply.yml` | Manual (`workflow_dispatch`) | `virtual-network-agent` | `plan` + `apply` |
 | `gitleaks.yml` | PR / push to `main` | — | Secret scanning |
 
 Both identities live in a persistent Terraform root ([`./ci`](./ci)), separate from this project's destroyable state — destroying/recreating the network doesn't break CI. Required GitHub repository variables: `ARM_CLIENT_ID_AGENT`, `ARM_CLIENT_ID_PLAN`, `ARM_TENANT_ID`, `ARM_SUBSCRIPTION_ID`.
