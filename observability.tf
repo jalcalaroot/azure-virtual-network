@@ -52,14 +52,18 @@ resource "azurerm_network_watcher_flow_log" "vnet" {
 }
 
 locals {
-  # Mismos 6 NSGs que tenian diagnostic settings antes de la migracion.
+  # Every NSG of the VNet sends its event and rule counter logs to the workspace.
   nsgs_with_diagnostics = {
-    public      = azurerm_network_security_group.public.id
-    private     = azurerm_network_security_group.private.id
-    data        = azurerm_network_security_group.data.id
-    privatelink = azurerm_network_security_group.privatelink.id
-    appgw       = azurerm_network_security_group.appgw.id
-    aks         = azurerm_network_security_group.aks.id
+    public           = azurerm_network_security_group.public.id
+    private          = azurerm_network_security_group.private.id
+    data             = azurerm_network_security_group.data.id
+    privatelink      = azurerm_network_security_group.privatelink.id
+    appgw            = azurerm_network_security_group.appgw.id
+    aks              = azurerm_network_security_group.aks.id
+    containerapps    = azurerm_network_security_group.containerapps.id
+    aks_virtual_node = azurerm_network_security_group.aks_virtual_nodes.id
+    func             = azurerm_network_security_group.func.id
+    apim             = azurerm_network_security_group.apim.id
   }
 }
 
@@ -72,5 +76,23 @@ resource "azurerm_monitor_diagnostic_setting" "nsg" {
 
   enabled_log {
     category_group = "allLogs"
+  }
+}
+
+# Public IP of the NAT Gateway (StandardV2 public IPs expose the same log and
+# metric categories as Standard ones). NAT Gateway metrics are NOT exportable
+# through diagnostic settings; they are available in Azure Monitor without
+# configuration.
+resource "azurerm_monitor_diagnostic_setting" "nat_public_ip" {
+  name                       = "diag-pip-nat-gateway"
+  target_resource_id         = azurerm_public_ip.nat.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+
+  enabled_log {
+    category_group = "allLogs"
+  }
+
+  enabled_metric {
+    category = "AllMetrics"
   }
 }
