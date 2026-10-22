@@ -1,11 +1,11 @@
 name: Terraform Apply
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "*.tf"
-      - ".github/workflows/terraform-apply.yml"
+  # Manual only. The stack is created on demand and destroyed afterwards, so its
+  # state is usually empty: an automatic apply on every merge to main would try
+  # to recreate everything. Run it from the Actions tab when a deployment is
+  # intended.
+  workflow_dispatch: {}
 
 permissions:
   id-token: write # requerido para autenticar contra Azure vía OIDC
