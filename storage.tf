@@ -44,7 +44,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "dfs" {
 module "storage_flowlogs" {
   #checkov:skip=CKV_TF_1:pinned por version semver del Terraform Registry, no un git tag - ver el mismo skip en network.tf para el detalle completo.
   source  = "Azure/avm-res-storage-storageaccount/azurerm"
-  version = "0.10.0"
+  version = "0.11.0"
 
   #checkov:skip=CKV_AZURE_33:este storage account no expone Queue service, no aplica.
   #checkov:skip=CKV_AZURE_206:LRS por costo - son logs operacionales no criticos, no datos de negocio.
@@ -85,7 +85,7 @@ module "storage_flowlogs" {
 module "storage_data" {
   #checkov:skip=CKV_TF_1:pinned por version semver del Terraform Registry, no un git tag - ver el mismo skip en network.tf para el detalle completo.
   source  = "Azure/avm-res-storage-storageaccount/azurerm"
-  version = "0.10.0"
+  version = "0.11.0"
 
   #checkov:skip=CKV_AZURE_33:este storage account no expone Queue service, no aplica.
   #checkov:skip=CKV_AZURE_206:ZRS por costo - ya cubre el diseno multi-AZ del proyecto (HA viene de zones, no de subnets por AZ); GRS/geo-redundancia es un salto de costo (~2x) que el consumidor puede pedir explicitamente si lo necesita.
